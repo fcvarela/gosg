@@ -64,7 +64,7 @@ func (app *Application) runLoop() {
 	glog.Info("Starting runloop...")
 
 	var dt = 1.0 / 60.0
-	var start = timerManager.GetTime()
+	var start = timerManager.Time()
 	var end = 0.0
 
 	for !app.client.Done() && !windowManager.ShouldClose() {
@@ -72,7 +72,7 @@ func (app *Application) runLoop() {
 		app.update(dt)
 
 		// compute time delta
-		end = timerManager.GetTime()
+		end = timerManager.Time()
 		dt = end - start
 
 		// safeguard for extreme deltas (breakpoints, suspends)
@@ -81,6 +81,7 @@ func (app *Application) runLoop() {
 		}
 
 		timerManager.SetDt(dt)
+		timerManager.setFrameStartTime(end)
 
 		// rotate time
 		start = end

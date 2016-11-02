@@ -17,6 +17,7 @@ type TimerHistogram struct {
 type TimerManager struct {
 	frameCounterMod10 int
 	dt                float64
+	frameStartTime    float64
 	fps               float64
 	avgFps            float64
 	paused            bool
@@ -59,9 +60,19 @@ func (ts *TimerManager) Paused() bool {
 	return ts.paused
 }
 
-// GetTime returns the system time in number of seconds since application startup.
-func (ts *TimerManager) GetTime() float64 {
+// Time returns the system time in number of seconds since application startup.
+func (ts *TimerManager) Time() float64 {
 	return glfw.GetTime()
+}
+
+// GetFrameStartTime returns the time at which the current frame started in number of seconds since application startup.
+func (ts *TimerManager) FrameStartTime() float64 {
+	return ts.frameStartTime
+}
+
+// SetFrameStartTime sets the current system time
+func (ts *TimerManager) setFrameStartTime(t float64) {
+	ts.frameStartTime = t
 }
 
 // SetDt is called by windowsystem implementations to set the time elapsed since last refreshed.
