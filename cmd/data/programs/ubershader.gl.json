@@ -1,0 +1,19 @@
+{
+  "shaders": {
+    "vertex": "ubershader.vs.glsl",
+    "fragment": "ubershader.fs.glsl"
+  },
+  "uniformBufferBindings": {
+    "cameraConstants": 0,
+    "nodeBlock": 1
+  },
+  "samplerBindings": {
+    "albedoTex": 0,
+    "normalTex": 1,
+    "roughTex": 2,
+    "metalTex": 3,
+    "shadowTex0": 4,
+    "shadowTex1": 5,
+    "shadowTex2": 6
+  }
+}

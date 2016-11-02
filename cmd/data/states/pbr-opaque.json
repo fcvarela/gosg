@@ -1,0 +1,14 @@
+{
+    "programName": "ubershader",
+    "culling": true,
+    "cullFace": "CULL_BACK",
+    "blending": false,
+    "blendSrcMode": "BLEND_SRC_ALPHA",
+    "blendDstMode": "BLEND_ONE_MINUS_SRC_ALPHA",
+    "blendEquation": "BLEND_FUNC_ADD",
+    "depthTest": true,
+    "depthWrite": false,
+    "depthFunc": "DEPTH_EQUAL",
+    "colorWrite": true,
+    "scissorTest": false
+}

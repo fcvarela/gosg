@@ -1,0 +1,10 @@
+{
+  "shaders": {
+    "vertex": "aabb.vs.glsl",
+    "fragment": "aabb.fs.glsl"
+  },
+  "uniformBufferBindings": {
+    "cameraConstants": 0,
+    "nodeBlock": 1
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "shaders": {
+    "vertex": "shadow.vs.glsl",
+    "fragment": "shadow.fs.glsl"
+  },
+  "uniformBufferBindings": {
+    "cameraConstants": 0,
+    "nodeBlock": 1
+  }
+}
