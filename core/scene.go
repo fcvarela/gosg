@@ -19,6 +19,7 @@ type Scene struct {
 	active bool
 
 	cameraList []*Camera
+	cameraMap  map[string]int
 
 	// per scene lights list
 	lights []*Light
@@ -40,6 +41,7 @@ func NewScene(name string) *Scene {
 	s.name = name
 	s.active = true
 	s.cameraList = make([]*Camera, 0)
+	s.cameraMap = make(map[string]int)
 	s.lights = make([]*Light, 0)
 
 	runtime.SetFinalizer(&s, deleteScene)
@@ -55,6 +57,11 @@ func (s *Scene) Root() *Node {
 // Cameras returns the scene's cameras
 func (s *Scene) Cameras() []*Camera {
 	return s.cameraList
+}
+
+// Camera returns a scene camera by name
+func (s *Scene) Camera(name string) *Camera {
+	return s.cameraList[s.cameraMap[name]]
 }
 
 // SetRoot returns the scene's root node
@@ -82,6 +89,7 @@ func (s *Scene) AddCamera(node *Node, camera *Camera) {
 	node.AddChild(camera.node)
 
 	s.cameraList = append(s.cameraList, camera)
+	s.cameraMap[camera.name] = len(s.cameraList) - 1
 
 	// resort camera list by renderorder
 	if len(s.cameraList) > 1 {

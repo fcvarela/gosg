@@ -21,7 +21,7 @@ layout (std140) uniform cameraConstants {
 in vec3 position;
 in vec3 cameraPosition;
 in vec3 tcoords0;
-in vec3 normal;
+in mat3 tbn;
 
 layout (location = 0) out vec4 color;
 
@@ -121,38 +121,13 @@ float diffuse_energy_ratio(float f0, vec3 n, vec3 l) {
     return 1.0 - fresnel(f0, n, l);
 }
 
-mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv) {
-    // get edge vectors of the pixel triangle
-    vec3 dp1 = dFdx( p );
-    vec3 dp2 = dFdy( p );
-    vec2 duv1 = dFdx( uv );
-    vec2 duv2 = dFdy( uv );
-
-    // solve the linear system
-    vec3 dp2perp = cross( dp2, N );
-    vec3 dp1perp = cross( N, dp1 );
-    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
-
-    // construct a scale-invariant frame
-    float invmax = inversesqrt( max( dot(T,T), dot(B,B) ) );
-    return mat3( T * invmax, B * invmax, N );
-}
-
-vec3 perturb_normal(vec3 N, vec3 V, vec2 texcoord) {
-    // assume N, the interpolated vertex normal and
-    // V, the view vector (vertex to eye)
-    vec3 map = texture(normalTex, texcoord).xyz * 2.0 - 1.0;
-    mat3 TBN = cotangent_frame(N, -V, texcoord);
-    return normalize(TBN * map);
-}
-
 void main() {
     // init
     color = vec4(0.0);
 
     // init materials
     vec4 albedo = texture(albedoTex, tcoords0.st);
+    vec3 normal = texture(normalTex, tcoords0.st).xyz * 2.0 - 1.0;
     float metalness = texture(metalTex, tcoords0.st).r;
     float roughness = 0.1 + 0.8 * texture(roughTex, tcoords0.st).r;
 
@@ -161,7 +136,7 @@ void main() {
 
     // normal, eye/view
     vec3 V = normalize(cameraPosition - position);
-    vec3 N = perturb_normal(normal, V, tcoords0.st);
+    vec3 N = normalize(tbn * normal);
 
     // shared products
     float NdotV = dot(N, V);

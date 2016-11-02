@@ -20,6 +20,7 @@ func (c *clientApplicationToggleDebugMenuCommand) Run(ac core.ClientApplication)
 	case "Demo1":
 		debugMenu := new(demo1DebugMenuInputComponent)
 		debugMenu.shadowTextures = getDemoSceneShadowTextures(frontScene)
+		debugMenu.mainScene = frontScene
 		sm.PushScene(core.NewIMGUIScene("debugMenu", debugMenu))
 	}
 }

@@ -25,9 +25,9 @@ layout (location = 2) in vec3 tcoords0_in;
 layout (location = 3) in mat4 mMatrix;
 
 out vec3 position;
-out vec3 normal;
 out vec3 cameraPosition;
 out vec3 tcoords0;
+out mat3 tbn;
 
 void main() {
     // clip position
@@ -38,7 +38,13 @@ void main() {
     cameraPosition = inverse(vMatrix)[3].rgb;
 
     // world TBN
-    normal = normalize((mMatrix * vec4(normal_in, 0.0)).xyz);
+    vec3 normal = normalize((mMatrix * vec4(normal_in, 0.0)).xyz);
+    vec3 tangent = normalize(cross(normal, vec3(0.0, 0.0, 1.0)));
+    vec3 bitangent = normalize(cross(normal, vec3(1.0, 0.0, 0.0)));
+
+    tangent = normalize((mMatrix * vec4(tangent, 0.0)).xyz);
+    bitangent = normalize((mMatrix * vec4(tangent, 0.0)).xyz);
+    tbn = mat3(tangent, bitangent, normal);
 
     // texture coordinates
     tcoords0 = tcoords0_in;

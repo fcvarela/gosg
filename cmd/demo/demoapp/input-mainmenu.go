@@ -9,6 +9,7 @@ import (
 
 type demo1DebugMenuInputComponent struct {
 	shadowTextures []core.Texture
+	mainScene      *core.Scene
 }
 
 func (u *demo1DebugMenuInputComponent) Run(n *core.Node) []core.NodeCommand {
@@ -36,6 +37,12 @@ func (u *demo1DebugMenuInputComponent) Run(n *core.Node) []core.NodeCommand {
 
 		if imguiSystem.CollapsingHeader("RenderLog") {
 			imguiSystem.Text(renderLog)
+		}
+
+		if imguiSystem.CollapsingHeader("Debug Nodes") {
+			u.mainScene.Camera("GeometryPassCamera").SetRenderTechnique(core.DebugRenderTechnique)
+		} else {
+			u.mainScene.Camera("GeometryPassCamera").SetRenderTechnique(core.DefaultRenderTechnique)
 		}
 	}
 
