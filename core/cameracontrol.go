@@ -1,6 +1,8 @@
 package core
 
 import (
+	"math"
+
 	"github.com/go-gl/glfw/v3.2/glfw"
 	"github.com/go-gl/mathgl/mgl64"
 )
@@ -28,15 +30,14 @@ func (rc MouseCameraRotateCommand) Run(node *Node) {
 
 // MouseCameraInputComponent is a utility inputcomponent for simple camera movement.
 type MouseCameraInputComponent struct {
-	maxVelocity float64
-	velocity    float64
+	velocityExponent float64
+	velocity         float64
 }
 
 // NewMouseCameraInputComponent returns a default inputcomponent for use with camera nodes which
-// uses the mouse wheel to set the camera's velocity according to the maxVelocity passed (world units/second).
-func NewMouseCameraInputComponent(maxVelocity float64) *MouseCameraInputComponent {
+// uses the mouse wheel to set the camera's velocity on 10x increments (world units/second).
+func NewMouseCameraInputComponent() *MouseCameraInputComponent {
 	mic := new(MouseCameraInputComponent)
-	mic.maxVelocity = maxVelocity
 	return mic
 }
 
@@ -79,14 +80,13 @@ func (ic *MouseCameraInputComponent) Run(node *Node) []NodeCommand {
 
 		// speed from scroll: doesn't generate commands, affects internal state only
 		if state.Mouse.Scroll.Valid {
-			ic.velocity += -state.Mouse.Scroll.Y * (ic.maxVelocity / 100.0)
+			ic.velocityExponent += -state.Mouse.Scroll.Y
 
-			// safe regions
-			if ic.velocity > ic.maxVelocity {
-				ic.velocity = ic.maxVelocity
-			}
-			if ic.velocity < 0.0 {
+			if ic.velocityExponent >= 0 {
+				ic.velocity = math.Pow(2.0, ic.velocityExponent)
+			} else {
 				ic.velocity = 0.0
+				ic.velocityExponent = -1.0
 			}
 		}
 	}

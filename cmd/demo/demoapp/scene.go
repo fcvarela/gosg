@@ -21,7 +21,7 @@ func makeGeometrySubscene() (*core.Node, *core.Camera) {
 	geometryCamera.SetClearColor(mgl32.Vec4{0.4, 0.6, 0.9, 1.0})
 	geometryCamera.SetClearMode(core.ClearColor | core.ClearDepth)
 	geometryCamera.SetClipDistance(mgl64.Vec2{1.0, 250.0})
-	geometryCamera.Node().SetInputComponent(core.NewMouseCameraInputComponent(100.0))
+	geometryCamera.Node().SetInputComponent(core.NewMouseCameraInputComponent())
 	geometryCamera.SetRenderOrder(0)
 
 	// create a framebuffer for this camera
