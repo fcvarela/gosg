@@ -65,7 +65,7 @@ func (ts *TimerManager) Time() float64 {
 	return glfw.GetTime()
 }
 
-// GetFrameStartTime returns the time at which the current frame started in number of seconds since application startup.
+// FrameStartTime returns the time at which the current frame started in number of seconds since application startup.
 func (ts *TimerManager) FrameStartTime() float64 {
 	return ts.frameStartTime
 }
