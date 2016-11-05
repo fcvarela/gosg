@@ -33,8 +33,7 @@ func main() {
 
 	// initialize the window, maybe show an OS-native dialogue here?
 	monitors := glfw.GetMonitors()
-	vms := monitors[0].GetVideoModes()
-	vm := vms[len(vms)-1]
+	vm := monitors[0].GetVideoMode()
 
 	core.GetWindowManager().SetWindowConfig(core.WindowConfig{
 		Name:       "Demo",
