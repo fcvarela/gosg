@@ -347,11 +347,14 @@ func (c *Camera) SetRenderTechnique(r RenderFn) {
 }
 
 type innerConstants struct {
-	ViewMatrix           mgl32.Mat4
-	ProjectionMatrix     mgl32.Mat4
-	ViewProjectionMatrix mgl32.Mat4
-	LightCount           mgl32.Vec4
-	LightBlocks          [16]LightBlock
+	DoubleViewMatrix           mgl64.Mat4
+	DoubleProjectionMatrix     mgl64.Mat4
+	DoubleViewProjectionMatrix mgl64.Mat4
+	ViewMatrix                 mgl32.Mat4
+	ProjectionMatrix           mgl32.Mat4
+	ViewProjectionMatrix       mgl32.Mat4
+	LightCount                 mgl32.Vec4
+	LightBlocks                [16]LightBlock
 }
 
 // CameraConstants holds a uniform buffer passed to all programs which contains global camera transforms
@@ -362,9 +365,8 @@ type CameraConstants struct {
 }
 
 var (
-	lightBlockLen = (maxCascades*16 + maxCascades*4 + 4 + 4)
-	// 16 lights * 16 floats per light + 4 floats lightcount, all mult4 (sizeof float)
-	sceneBlockLen = (3*16 + 16*lightBlockLen + 4) * 4
+	lightBlockLen = (maxCascades*16 + maxCascades*4 + 4 + 4) // 16 lights * 16 floats per light + 4 floats lightcount, all mult4 (sizeof float)
+	sceneBlockLen = (3*16+16*lightBlockLen+4)*4 + (3*16)*8
 )
 
 // NewCameraConstants returns a new CameraConstants. The UniformBuffer is returned by the rendersystem.
@@ -375,6 +377,9 @@ func NewCameraConstants() *CameraConstants {
 // SetData sets matrices and light information for the entire scene
 func (sb *CameraConstants) SetData(pMatrix, vMatrix mgl64.Mat4, l []*Light) {
 	// matrices
+	sb.inner.DoubleViewMatrix = vMatrix
+	sb.inner.DoubleProjectionMatrix = pMatrix
+	sb.inner.DoubleViewProjectionMatrix = pMatrix.Mul4(vMatrix)
 	sb.inner.ViewMatrix = Mat4DoubleToFloat(vMatrix)
 	sb.inner.ProjectionMatrix = Mat4DoubleToFloat(pMatrix)
 	sb.inner.ViewProjectionMatrix = Mat4DoubleToFloat(pMatrix.Mul4(vMatrix))

@@ -133,7 +133,7 @@ var (
 )
 
 const (
-	// Maximum number of modelMatrices in a mesh instance attribute buffer
+	// MaxInstances is the maximum number of modelMatrices in a mesh instance attribute buffer
 	MaxInstances = 2000
 )
 
