@@ -1,18 +1,25 @@
 #version 410 core
 
+#define MAX_CASCADES 10
+#define MAX_LIGHTS 16
+
 // global uniforms
 struct light {
-    mat4 vpMatrix;
+    mat4 vpMatrix[MAX_CASCADES];
+    vec4 zCuts[MAX_CASCADES];
     vec4 position;
     vec4 color;
 };
 
 layout (std140) uniform cameraConstants {
+    dmat4 dvMatrix;
+    dmat4 dpMatrix;
+    dmat4 dvpMatrix;
     mat4 vMatrix;
     mat4 pMatrix;
     mat4 vpMatrix;
     vec4 lightCount;
-    light lights[16];
+    light lights[MAX_LIGHTS];
 };
 
 // this is the same for all our models
