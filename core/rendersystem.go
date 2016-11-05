@@ -207,7 +207,7 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*No
 			continue
 		}
 
-		var modelMatrices [2000 * 16]float32
+		var modelMatrices [MaxInstances * 16]float32
 		for i, n := range nodes {
 			var center = n.worldBounds.Center()
 			var size = n.worldBounds.Size()
@@ -248,7 +248,7 @@ func RenderBatch(nodes []*Node, cmdBuf chan RenderCommand) {
 	if len(nodes) == 0 {
 		return
 	}
-	var modelMatrices [2000 * 16]float32
+	var modelMatrices [MaxInstances * 16]float32
 	for i, n := range nodes {
 		transform64 := n.WorldTransform()
 		transform32 := Mat4DoubleToFloat(transform64)
