@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/fcvarela/gosg/protos"
 	"github.com/go-gl/glfw/v3.2/glfw"
@@ -54,7 +55,7 @@ type BindDescriptorsCommand struct {
 type DrawInstancedCommand struct {
 	Mesh          Mesh
 	InstanceCount int
-	ModelMatrices []float32
+	ModelMatrices unsafe.Pointer
 }
 
 // DrawCommand draws a mesh
@@ -129,9 +130,11 @@ type RenderPass struct {
 
 var (
 	renderSystem RenderSystem
+)
 
-	// fixme, this is a hack, don't know where to keep this
-	boundsMesh Mesh
+const (
+	// Maximum number of modelMatrices in a mesh instance attribute buffer
+	MaxInstances = 2000
 )
 
 // SetRenderSystem is meant to be called from RenderSystem implementations on their init method
@@ -204,8 +207,8 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*No
 			continue
 		}
 
-		var modelMatrices []float32
-		for _, n := range nodes {
+		var modelMatrices [2000 * 16]float32
+		for i, n := range nodes {
 			var center = n.worldBounds.Center()
 			var size = n.worldBounds.Size()
 
@@ -213,9 +216,9 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*No
 			var transform64 = mgl64.Translate3D(
 				center[0], center[1], center[2]).Mul4(mgl64.Scale3D(size[0], size[1], size[2]))
 			var transform32 = Mat4DoubleToFloat(transform64)
-			modelMatrices = append(modelMatrices, transform32[0:16]...)
+			copy(modelMatrices[i*16:i*16+16], transform32[0:16])
 		}
-		cmdBuf <- &DrawInstancedCommand{Mesh: AABBMesh(), InstanceCount: len(nodes), ModelMatrices: modelMatrices}
+		cmdBuf <- &DrawInstancedCommand{Mesh: AABBMesh(), InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&modelMatrices)}
 	}
 }
 
@@ -245,14 +248,14 @@ func RenderBatch(nodes []*Node, cmdBuf chan RenderCommand) {
 	if len(nodes) == 0 {
 		return
 	}
-	var modelMatrices []float32
-	for _, n := range nodes {
+	var modelMatrices [2000 * 16]float32
+	for i, n := range nodes {
 		transform64 := n.WorldTransform()
 		transform32 := Mat4DoubleToFloat(transform64)
-		modelMatrices = append(modelMatrices, transform32[0:16]...)
+		copy(modelMatrices[i*16:i*16+16], transform32[0:16])
 	}
 	cmdBuf <- &BindDescriptorsCommand{
 		Descriptors: &nodes[0].materialData,
 	}
-	cmdBuf <- &DrawInstancedCommand{Mesh: nodes[0].mesh, InstanceCount: len(nodes), ModelMatrices: modelMatrices}
+	cmdBuf <- &DrawInstancedCommand{Mesh: nodes[0].mesh, InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&modelMatrices)}
 }

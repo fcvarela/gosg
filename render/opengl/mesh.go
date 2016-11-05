@@ -78,9 +78,9 @@ func newBuffers() *buffers {
 	// indices
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, bf.buffers[indexBuffer])
 
-	// model matrices, prealloc for 200 instances of 4x4 matrices with 4 bytes per float (this is our hard-max)
+	// model matrices, prealloc for core.MaxInstances instances of 4x4 matrices with 4 bytes per float (this is our hard-max)
 	gl.BindBuffer(gl.ARRAY_BUFFER, bf.buffers[modelMatrixBuffer])
-	gl.BufferData(gl.ARRAY_BUFFER, 200*16*4, nil, gl.STREAM_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*16*4, nil, gl.STREAM_DRAW)
 
 	gl.EnableVertexAttribArray(3)
 	gl.VertexAttribPointer(3, 4, gl.FLOAT, false, 16*4, gl.PtrOffset(0*16))
@@ -315,8 +315,9 @@ func (m *Mesh) SetInstanceCount(count int) {
 }
 
 // SetModelMatrices implements the core.InstancedMesh interface
-func (m *Mesh) SetModelMatrices(matrices []float32) {
+func (m *Mesh) SetModelMatrices(matrices unsafe.Pointer) {
 	gl.BindBuffer(gl.ARRAY_BUFFER, m.buffers.buffers[modelMatrixBuffer])
-	gl.BufferData(gl.ARRAY_BUFFER, len(matrices)*4, gl.Ptr(matrices), gl.STREAM_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*16*4, nil, gl.STREAM_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*16*4, matrices, gl.STREAM_DRAW)
 	gl.BindBuffer(gl.ARRAY_BUFFER, 0)
 }

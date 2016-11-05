@@ -93,6 +93,7 @@ func (ub *UniformBuffer) Set(data unsafe.Pointer, dataLen int) {
 	var cmd = &lambdaRenderCommand{
 		fn: func() error {
 			gl.BindBuffer(gl.UNIFORM_BUFFER, ub.id)
+			gl.BufferData(gl.UNIFORM_BUFFER, dataLen, nil, gl.DYNAMIC_DRAW)
 			gl.BufferData(gl.UNIFORM_BUFFER, dataLen, data, gl.DYNAMIC_DRAW)
 			return nil
 		},

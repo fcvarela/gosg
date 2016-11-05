@@ -1,5 +1,9 @@
 package core
 
+import (
+	"unsafe"
+)
+
 // PrimitiveType is a raster primitive type.
 type PrimitiveType uint8
 
@@ -19,7 +23,7 @@ type Mesh interface {
 	SetTextureCoordinates(coordinates []float32)
 	SetIndices(indices []uint16)
 	SetInstanceCount(count int)
-	SetModelMatrices(matrices []float32)
+	SetModelMatrices(matrices unsafe.Pointer)
 
 	SetName(name string)
 	Name() string
