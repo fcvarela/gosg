@@ -22,13 +22,11 @@ type Mesh interface {
 	SetNormals(normals []float32)
 	SetTextureCoordinates(coordinates []float32)
 	SetIndices(indices []uint16)
-	SetInstanceCount(count int)
-	SetModelMatrices(matrices unsafe.Pointer)
 
 	SetName(name string)
 	Name() string
-
 	Draw()
+	DrawInstanced(int, unsafe.Pointer)
 
 	Bounds() *AABB
 
@@ -118,7 +116,6 @@ func AABBMesh() Mesh {
 	aabbMesh.SetNormals(positions)
 	aabbMesh.SetTextureCoordinates(positions)
 	aabbMesh.SetIndices(indices)
-	aabbMesh.SetInstanceCount(1)
 	aabbMesh.SetName("AABB")
 
 	return aabbMesh

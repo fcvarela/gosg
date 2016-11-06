@@ -28,15 +28,15 @@ func (r *RenderSystem) PostMakeWindow(cfg core.WindowConfig, w *glfw.Window) {
 		maxVertexUniformVectors   int32
 	)
 	gl.GetIntegerv(gl.MAX_TEXTURE_BUFFER_SIZE, &maxTextureBufferSize)
-	gl.GetIntegerv(gl.MAX_TEXTURE_BUFFER_SIZE, &maxUniformBlockSize)
-	gl.GetIntegerv(gl.MAX_TEXTURE_BUFFER_SIZE, &maxShaderStorageBlockSize)
+	gl.GetIntegerv(gl.MAX_UNIFORM_BLOCK_SIZE, &maxUniformBlockSize)
+	gl.GetIntegerv(gl.MAX_SHADER_STORAGE_BLOCK_SIZE, &maxShaderStorageBlockSize)
 	gl.GetIntegerv(gl.MAX_VERTEX_UNIFORM_VECTORS, &maxVertexUniformVectors)
 
 	glog.Info("Maximum buffer sizes:")
-	glog.Infof("\tTBO (texels, bytes): %d %d", maxTextureBufferSize, maxTextureBufferSize*4*4)
-	glog.Infof("\tUBO (bytes): %d", maxUniformBlockSize)
-	glog.Infof("\tSSBO (bytes): %d", maxShaderStorageBlockSize)
-	glog.Infof("\tMax vertex uniform vectors: %d", maxVertexUniformVectors)
+	glog.Infof("\tTextureBuffer: %d", maxTextureBufferSize)
+	glog.Infof("\tUniformBlock: %d", maxUniformBlockSize)
+	glog.Infof("\tShaderStorageBlock (bytes): %d", maxShaderStorageBlockSize)
+	glog.Infof("\tUniformVectors: %d", maxVertexUniformVectors)
 
 	// generate basic mesh buffers
 	sharedBuffers = newBuffers()

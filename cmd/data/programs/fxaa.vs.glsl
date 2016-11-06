@@ -23,13 +23,18 @@ layout (std140) uniform cameraConstants {
 };
 
 // this is the same for all our models
-layout (location = 0) in vec2 position_in;
-layout (location = 1) in vec3 normal_in;
-layout (location = 2) in vec3 tcoords0_in;
+layout (location =  0) in vec3 position_in;
+layout (location =  1) in vec3 normal_in;
+layout (location =  2) in vec3 tcoords0_in;
+layout (location =  3) in mat4 mMatrix;
+layout (location =  7) in vec4 custom1;
+layout (location =  8) in vec4 custom2;
+layout (location =  9) in vec4 custom3;
+layout (location = 10) in vec4 custom4;
 
 out vec3 tcoords0;
 
 void main() {
-    gl_Position = pMatrix * vec4(position_in, 0.0, 1.0);
+    gl_Position = pMatrix * vec4(position_in, 1.0);
     tcoords0 = tcoords0_in;
 }

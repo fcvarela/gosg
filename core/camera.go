@@ -63,7 +63,7 @@ type Camera struct {
 	frustum            [6]mgl64.Vec4
 	cascadingAABBS     [maxCascades]*AABB
 	cascadingZCuts     [maxCascades]float64
-	constants          *CameraConstants
+	constants          cameraUBO
 	renderTechnique    RenderFn
 	stateBuckets       map[*protos.State][]*Node
 	visibleOpaqueNodes []*Node
@@ -106,7 +106,7 @@ func NewCamera(name string, projType ProjectionType) *Camera {
 	cam.SetProjectionType(projType)
 	cam.node = NewNode(name)
 	cam.node.bounds = nil
-	cam.constants = NewCameraConstants()
+	cam.constants.buffer = renderSystem.NewUniformBuffer()
 	cam.renderTechnique = DefaultRenderTechnique
 	cam.stateBuckets = make(map[*protos.State][]*Node)
 	cam.visibleOpaqueNodes = make([]*Node, 0)
@@ -326,11 +326,6 @@ func (c *Camera) SetFramebuffer(rt Framebuffer) {
 	c.framebuffer = rt
 }
 
-// Constants returns the camera's constants. This contains constant buffers for vertex shaders, etc.
-func (c *Camera) Constants() *CameraConstants {
-	return c.constants
-}
-
 // RenderOrder order returns the camera's render order.
 func (c *Camera) RenderOrder() uint8 {
 	return c.renderOrder
@@ -357,9 +352,9 @@ type innerConstants struct {
 	LightBlocks                [16]LightBlock
 }
 
-// CameraConstants holds a uniform buffer passed to all programs which contains global camera transforms
+// cameraUBO holds a uniform buffer passed to all programs which contains global camera transforms
 // and a list of active lights.
-type CameraConstants struct {
+type cameraUBO struct {
 	inner  innerConstants
 	buffer UniformBuffer
 }
@@ -369,13 +364,8 @@ var (
 	sceneBlockLen = (3*16+16*lightBlockLen+4)*4 + (3*16)*8
 )
 
-// NewCameraConstants returns a new CameraConstants. The UniformBuffer is returned by the rendersystem.
-func NewCameraConstants() *CameraConstants {
-	return &CameraConstants{innerConstants{}, renderSystem.NewUniformBuffer()}
-}
-
 // SetData sets matrices and light information for the entire scene
-func (sb *CameraConstants) SetData(pMatrix, vMatrix mgl64.Mat4, l []*Light) {
+func (sb *cameraUBO) SetData(pMatrix, vMatrix mgl64.Mat4, l []*Light) {
 	// matrices
 	sb.inner.DoubleViewMatrix = vMatrix
 	sb.inner.DoubleProjectionMatrix = pMatrix
@@ -399,6 +389,6 @@ func (sb *CameraConstants) SetData(pMatrix, vMatrix mgl64.Mat4, l []*Light) {
 }
 
 // UniformBuffer returns the camera constants uniform buffer
-func (sb *CameraConstants) UniformBuffer() UniformBuffer {
+func (sb *cameraUBO) UniformBuffer() UniformBuffer {
 	return sb.buffer
 }

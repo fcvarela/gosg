@@ -3,6 +3,7 @@ package core
 import (
 	"unsafe"
 
+	"github.com/fcvarela/gosg/protos"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
 )
@@ -165,6 +166,7 @@ func NewIMGUIScene(name string, inputComponent InputComponent) *Scene {
 
 	size := windowManager.WindowSize()
 	camera := NewCamera("MainMenuCamera", OrthographicProjection)
+	camera.SetRenderTechnique(IMGUIRenderTechnique)
 	camera.SetAutoReshape(true)
 	camera.SetClearMode(0)
 	camera.SetViewport(mgl32.Vec4{0, 0, size.X(), size.Y()})
@@ -187,4 +189,19 @@ func NewIMGUIScene(name string, inputComponent InputComponent) *Scene {
 	s.AddCamera(node, camera)
 
 	return s
+}
+
+// IMGUIRenderTechnique does z pre-pass, diffuse pass, transparency pass
+func IMGUIRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*Node, cmdBuf chan RenderCommand) {
+	cmdBuf <- &SetFramebufferCommand{camera.framebuffer}
+	cmdBuf <- &SetViewportCommand{camera.viewport}
+	cmdBuf <- &ClearCommand{camera.clearMode, camera.clearColor, camera.clearDepth}
+	cmdBuf <- &BindUniformBufferCommand{"cameraConstants", camera.constants.buffer}
+
+	var imguiState = resourceManager.State("imgui")
+	cmdBuf <- &BindStateCommand{imguiState}
+	for _, nodes := range materialBuckets {
+		cmdBuf <- &BindDescriptorsCommand{Descriptors: &nodes[0].materialData}
+		cmdBuf <- &DrawCommand{Mesh: nodes[0].mesh}
+	}
 }

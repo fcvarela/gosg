@@ -1,6 +1,7 @@
 package opengl
 
 import (
+	"C"
 	"unsafe"
 
 	"github.com/fcvarela/gosg/core"
@@ -15,7 +16,7 @@ const (
 	normalBuffer
 	texCoordBuffer
 	indexBuffer
-	modelMatrixBuffer
+	instanceDataBuffer
 )
 
 type buffers struct {
@@ -51,8 +52,8 @@ func newBuffers() *buffers {
 	gl.GenVertexArrays(1, &bf.vao)
 
 	// create buffers
-	bf.buffers = make([]uint32, modelMatrixBuffer+1)
-	bf.bufferOffsets = make([]int, modelMatrixBuffer+1)
+	bf.buffers = make([]uint32, instanceDataBuffer+1)
+	bf.bufferOffsets = make([]int, instanceDataBuffer+1)
 
 	// initialize gl buffer handles
 	gl.GenBuffers(int32(len(bf.buffers)), &bf.buffers[0])
@@ -79,24 +80,41 @@ func newBuffers() *buffers {
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, bf.buffers[indexBuffer])
 
 	// model matrices, prealloc for core.MaxInstances instances of 4x4 matrices with 4 bytes per float (this is our hard-max)
-	gl.BindBuffer(gl.ARRAY_BUFFER, bf.buffers[modelMatrixBuffer])
-	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*16*4, nil, gl.STREAM_DRAW)
+	gl.BindBuffer(gl.ARRAY_BUFFER, bf.buffers[instanceDataBuffer])
+	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*core.InstanceDataLen, nil, gl.STREAM_DRAW)
 
 	gl.EnableVertexAttribArray(3)
-	gl.VertexAttribPointer(3, 4, gl.FLOAT, false, 16*4, gl.PtrOffset(0*16))
+	gl.VertexAttribPointer(3, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(0*16))
 	gl.VertexAttribDivisor(3, 1)
 
 	gl.EnableVertexAttribArray(4)
-	gl.VertexAttribPointer(4, 4, gl.FLOAT, false, 16*4, gl.PtrOffset(1*16))
+	gl.VertexAttribPointer(4, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(1*16))
 	gl.VertexAttribDivisor(4, 1)
 
 	gl.EnableVertexAttribArray(5)
-	gl.VertexAttribPointer(5, 4, gl.FLOAT, false, 16*4, gl.PtrOffset(2*16))
+	gl.VertexAttribPointer(5, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(2*16))
 	gl.VertexAttribDivisor(5, 1)
 
 	gl.EnableVertexAttribArray(6)
-	gl.VertexAttribPointer(6, 4, gl.FLOAT, false, 16*4, gl.PtrOffset(3*16))
+	gl.VertexAttribPointer(6, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(3*16))
 	gl.VertexAttribDivisor(6, 1)
+
+	// custom data
+	gl.EnableVertexAttribArray(7)
+	gl.VertexAttribPointer(7, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(4*16))
+	gl.VertexAttribDivisor(7, 1)
+
+	gl.EnableVertexAttribArray(8)
+	gl.VertexAttribPointer(8, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(5*16))
+	gl.VertexAttribDivisor(8, 1)
+
+	gl.EnableVertexAttribArray(9)
+	gl.VertexAttribPointer(9, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(6*16))
+	gl.VertexAttribDivisor(9, 1)
+
+	gl.EnableVertexAttribArray(10)
+	gl.VertexAttribPointer(10, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(7*16))
+	gl.VertexAttribDivisor(10, 1)
 
 	bindVAO(0)
 	return bf
@@ -113,7 +131,6 @@ type Mesh struct {
 	indexcount        int32
 	indexOffset       int32
 	indexBufferOffset int32
-	instanceCount     int32
 	name              string
 	bounds            *core.AABB
 	primitiveType     uint32
@@ -238,9 +255,23 @@ func (m *Mesh) SetIndices(indices []uint16) {
 // Draw implements the core.Mesh interface
 func (m *Mesh) Draw() {
 	bindVAO(m.buffers.vao)
+	gl.DrawElementsBaseVertex(
+		m.primitiveType, m.indexcount, gl.UNSIGNED_SHORT,
+		gl.PtrOffset(int(m.indexBufferOffset)), m.indexOffset)
+}
+
+// DrawInstanced implements the core.Mesh interface
+func (m *Mesh) DrawInstanced(instanceCount int, instanceData unsafe.Pointer) {
+	// copy per instance data and orphan last buffer
+	gl.BindBuffer(gl.ARRAY_BUFFER, m.buffers.buffers[instanceDataBuffer])
+	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*core.InstanceDataLen, nil, gl.STREAM_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*core.InstanceDataLen, instanceData, gl.STREAM_DRAW)
+	gl.BindBuffer(gl.ARRAY_BUFFER, 0)
+
+	bindVAO(m.buffers.vao)
 	gl.DrawElementsInstancedBaseVertex(
 		m.primitiveType, m.indexcount, gl.UNSIGNED_SHORT,
-		gl.PtrOffset(int(m.indexBufferOffset)), m.instanceCount, m.indexOffset)
+		gl.PtrOffset(int(m.indexBufferOffset)), int32(instanceCount), m.indexOffset)
 }
 
 // Draw implements the core.IMGUIMesh interface
@@ -307,17 +338,4 @@ func (m *Mesh) Lt(other core.Mesh) bool {
 // Gt implements the core.Mesh interface
 func (m *Mesh) Gt(other core.Mesh) bool {
 	return m.buffers.vao > other.(*Mesh).buffers.vao
-}
-
-// SetInstanceCount implements the core.InstancedMesh interface
-func (m *Mesh) SetInstanceCount(count int) {
-	m.instanceCount = int32(count)
-}
-
-// SetModelMatrices implements the core.InstancedMesh interface
-func (m *Mesh) SetModelMatrices(matrices unsafe.Pointer) {
-	gl.BindBuffer(gl.ARRAY_BUFFER, m.buffers.buffers[modelMatrixBuffer])
-	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*16*4, nil, gl.STREAM_DRAW)
-	gl.BufferData(gl.ARRAY_BUFFER, core.MaxInstances*16*4, matrices, gl.STREAM_DRAW)
-	gl.BindBuffer(gl.ARRAY_BUFFER, 0)
 }

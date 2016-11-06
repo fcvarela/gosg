@@ -1,10 +1,16 @@
 package core
 
+import "github.com/go-gl/mathgl/mgl32"
+
 // Descriptors contains material properties for a specific drawable
 type Descriptors struct {
 	uniforms       map[string]Uniform
 	uniformBuffers map[string]UniformBuffer
 	textures       map[string]Texture
+	custom1        mgl32.Vec4
+	custom2        mgl32.Vec4
+	custom3        mgl32.Vec4
+	custom4        mgl32.Vec4
 }
 
 // NewDescriptors returns a new MaterialData
@@ -13,6 +19,10 @@ func NewDescriptors() Descriptors {
 		make(map[string]Uniform),
 		make(map[string]UniformBuffer),
 		make(map[string]Texture),
+		mgl32.Vec4{},
+		mgl32.Vec4{},
+		mgl32.Vec4{},
+		mgl32.Vec4{},
 	}
 	return s
 }

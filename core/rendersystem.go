@@ -132,9 +132,23 @@ var (
 	renderSystem RenderSystem
 )
 
+// InstanceData holds the per-instance-data when using instanced drawing. It is automatically
+// populated by all the included RenderTechniques. Use node.GetInstanceData() to change its custom
+// values
+type InstanceData struct {
+	ModelMatrix mgl32.Mat4
+	Custom1     mgl32.Vec4
+	Custom2     mgl32.Vec4
+	Custom3     mgl32.Vec4
+	Custom4     mgl32.Vec4
+}
+
 const (
 	// MaxInstances is the maximum number of modelMatrices in a mesh instance attribute buffer
 	MaxInstances = 2000
+
+	// InstanceDataLen is the byte size of an InstanceData value
+	InstanceDataLen = (1*16 + 4*4) * 4
 )
 
 // SetRenderSystem is meant to be called from RenderSystem implementations on their init method
@@ -207,18 +221,17 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*No
 			continue
 		}
 
-		var modelMatrices [MaxInstances * 16]float32
+		var instanceData [MaxInstances]InstanceData
 		for i, n := range nodes {
 			var center = n.worldBounds.Center()
 			var size = n.worldBounds.Size()
 
 			// need a setuniform command
-			var transform64 = mgl64.Translate3D(
-				center[0], center[1], center[2]).Mul4(mgl64.Scale3D(size[0], size[1], size[2]))
+			var transform64 = mgl64.Translate3D(center[0], center[1], center[2]).Mul4(mgl64.Scale3D(size[0], size[1], size[2]))
 			var transform32 = Mat4DoubleToFloat(transform64)
-			copy(modelMatrices[i*16:i*16+16], transform32[0:16])
+			instanceData[i].ModelMatrix = transform32
 		}
-		cmdBuf <- &DrawInstancedCommand{Mesh: AABBMesh(), InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&modelMatrices)}
+		cmdBuf <- &DrawInstancedCommand{Mesh: AABBMesh(), InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&instanceData)}
 	}
 }
 
@@ -248,14 +261,19 @@ func RenderBatch(nodes []*Node, cmdBuf chan RenderCommand) {
 	if len(nodes) == 0 {
 		return
 	}
-	var modelMatrices [MaxInstances * 16]float32
+
+	var instanceData [MaxInstances]InstanceData
 	for i, n := range nodes {
 		transform64 := n.WorldTransform()
 		transform32 := Mat4DoubleToFloat(transform64)
-		copy(modelMatrices[i*16:i*16+16], transform32[0:16])
+		instanceData[i].ModelMatrix = transform32
+		instanceData[i].Custom1 = n.materialData.custom1
+		instanceData[i].Custom2 = n.materialData.custom2
+		instanceData[i].Custom3 = n.materialData.custom3
+		instanceData[i].Custom4 = n.materialData.custom4
 	}
 	cmdBuf <- &BindDescriptorsCommand{
 		Descriptors: &nodes[0].materialData,
 	}
-	cmdBuf <- &DrawInstancedCommand{Mesh: nodes[0].mesh, InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&modelMatrices)}
+	cmdBuf <- &DrawInstancedCommand{Mesh: nodes[0].mesh, InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&instanceData)}
 }
