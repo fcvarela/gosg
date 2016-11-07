@@ -281,6 +281,16 @@ func (n *Node) setDirtyBounds() {
 	}
 }
 
+func (n *Node) setDirtyTransform() {
+	n.dirtyTransform = true
+	if n.parent != nil {
+		n.parent.setDirtyBounds()
+	}
+	for _, c := range n.children {
+		c.setDirtyTransform()
+	}
+}
+
 // SetState sets the node's pipeline state
 func (n *Node) SetState(s *protos.State) {
 	n.state = s
@@ -309,7 +319,7 @@ func (n *Node) SetWorldTransform(transform mgl64.Mat4) {
 		n.transform = transform
 		n.worldTransform = transform
 	}
-	n.dirtyTransform = true
+	n.setDirtyTransform()
 	n.setDirtyBounds()
 }
 
@@ -439,21 +449,21 @@ func (n *Node) updateTransforms() {
 func (n *Node) Rotate(eulerAngle float64, axis mgl64.Vec3) {
 	rotationMatrix := mgl64.QuatRotate(mgl64.DegToRad(eulerAngle), axis).Normalize().Mat4()
 	n.transform = n.transform.Mul4(rotationMatrix)
-	n.updateTransforms()
+	n.setDirtyTransform()
 	n.setDirtyBounds()
 }
 
 // Translate translates a node.
 func (n *Node) Translate(vec mgl64.Vec3) {
 	n.transform = n.transform.Mul4(mgl64.Translate3D(vec.X(), vec.Y(), vec.Z()))
-	n.updateTransforms()
+	n.setDirtyTransform()
 	n.setDirtyBounds()
 }
 
 // Scale scales a node.
 func (n *Node) Scale(s mgl64.Vec3) {
 	n.transform = n.transform.Mul4(mgl64.Scale3D(s[0], s[1], s[2]))
-	n.updateTransforms()
+	n.setDirtyTransform()
 	n.updateBounds()
 }
 
@@ -461,7 +471,6 @@ func (n *Node) Scale(s mgl64.Vec3) {
 func (n *Node) AddChild(c *Node) {
 	n.children = append(n.children, c)
 	c.parent = n
-	c.parent.setDirtyBounds()
 	n.setDirtyBounds()
 }
 
