@@ -7,10 +7,7 @@ type Descriptors struct {
 	uniforms       map[string]Uniform
 	uniformBuffers map[string]UniformBuffer
 	textures       map[string]Texture
-	custom1        mgl32.Vec4
-	custom2        mgl32.Vec4
-	custom3        mgl32.Vec4
-	custom4        mgl32.Vec4
+	instanceData   [4]mgl32.Vec4
 }
 
 // NewDescriptors returns a new MaterialData
@@ -19,10 +16,7 @@ func NewDescriptors() Descriptors {
 		make(map[string]Uniform),
 		make(map[string]UniformBuffer),
 		make(map[string]Texture),
-		mgl32.Vec4{},
-		mgl32.Vec4{},
-		mgl32.Vec4{},
-		mgl32.Vec4{},
+		[4]mgl32.Vec4{},
 	}
 	return s
 }
@@ -68,4 +62,14 @@ func (s *Descriptors) UniformBuffer(name string) UniformBuffer {
 // UniformBuffers returns the state's uniform buffers
 func (s *Descriptors) UniformBuffers() map[string]UniformBuffer {
 	return s.uniformBuffers
+}
+
+// InstanceData returns the descriptor per instance data
+func (s *Descriptors) InstanceData() [4]mgl32.Vec4 {
+	return s.instanceData
+}
+
+// SetInstanceDataField returns the descriptor per instance data
+func (s *Descriptors) SetInstanceDataField(index int, v mgl32.Vec4) {
+	s.instanceData[index] = v
 }

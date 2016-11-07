@@ -137,10 +137,7 @@ var (
 // values
 type InstanceData struct {
 	ModelMatrix mgl32.Mat4
-	Custom1     mgl32.Vec4
-	Custom2     mgl32.Vec4
-	Custom3     mgl32.Vec4
-	Custom4     mgl32.Vec4
+	Custom      [4]mgl32.Vec4
 }
 
 const (
@@ -267,13 +264,8 @@ func RenderBatch(nodes []*Node, cmdBuf chan RenderCommand) {
 		transform64 := n.WorldTransform()
 		transform32 := Mat4DoubleToFloat(transform64)
 		instanceData[i].ModelMatrix = transform32
-		instanceData[i].Custom1 = n.materialData.custom1
-		instanceData[i].Custom2 = n.materialData.custom2
-		instanceData[i].Custom3 = n.materialData.custom3
-		instanceData[i].Custom4 = n.materialData.custom4
+		instanceData[i].Custom = n.materialData.instanceData
 	}
-	cmdBuf <- &BindDescriptorsCommand{
-		Descriptors: &nodes[0].materialData,
-	}
+	cmdBuf <- &BindDescriptorsCommand{Descriptors: &nodes[0].materialData}
 	cmdBuf <- &DrawInstancedCommand{Mesh: nodes[0].mesh, InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&instanceData)}
 }
