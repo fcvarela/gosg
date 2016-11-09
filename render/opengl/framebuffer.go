@@ -13,28 +13,15 @@ type Framebuffer struct {
 	colorAttachments map[int]core.Texture
 }
 
-type makeFramebufferCommand struct {
-	fb core.Framebuffer
-}
-
 var (
 	currentFBO = uint32(0)
 )
 
-func (r *RenderSystem) makeFramebuffer(cmd *makeFramebufferCommand) error {
-	fb := &Framebuffer{0, nil, make(map[int]core.Texture)}
-	gl.GenFramebuffers(1, &fb.fbo)
-	cmd.fb = fb
-	return nil
-}
-
 // NewFramebuffer implements the core.RenderSystem interface
 func (r *RenderSystem) NewFramebuffer() core.Framebuffer {
-	var cmd = &makeFramebufferCommand{}
-	if err := r.Run(cmd, true); err != nil {
-		glog.Fatal(err)
-	}
-	return cmd.fb
+	fb := &Framebuffer{0, nil, make(map[int]core.Texture)}
+	gl.GenFramebuffers(1, &fb.fbo)
+	return fb
 }
 
 // validates the current bound framebuffer
@@ -59,16 +46,10 @@ func validateCurrentFramebuffer() {
 
 // SetDepthAttachment implements the core.RenderTarger interface
 func (f *Framebuffer) SetDepthAttachment(attachment core.Texture) {
-	var cmd = &lambdaRenderCommand{
-		fn: func() error {
-			f.depthAttachment = attachment
-			bindFramebuffer(f.fbo)
-			gl.FramebufferTexture(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, f.depthAttachment.(*Texture).id, 0)
-			validateCurrentFramebuffer()
-			return nil
-		},
-	}
-	renderSystem.Run(cmd, true)
+	f.depthAttachment = attachment
+	bindFramebuffer(f.fbo)
+	gl.FramebufferTexture(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, f.depthAttachment.(*Texture).id, 0)
+	validateCurrentFramebuffer()
 }
 
 // DepthAttachment implements the core.RenderTarger interface
@@ -78,28 +59,22 @@ func (f *Framebuffer) DepthAttachment() core.Texture {
 
 // SetColorAttachment implements the core.RenderTarger interface
 func (f *Framebuffer) SetColorAttachment(index int, attachment core.Texture) {
-	var cmd = &lambdaRenderCommand{
-		fn: func() error {
-			f.colorAttachments[index] = attachment
-			bindFramebuffer(f.fbo)
+	f.colorAttachments[index] = attachment
+	bindFramebuffer(f.fbo)
 
-			// rebuild drawbuffers
-			drawBuffers := make([]uint32, len(f.colorAttachments))
-			for i := range f.colorAttachments {
-				drawBuffers[i] = uint32(gl.COLOR_ATTACHMENT0 + i)
-				gl.FramebufferTexture(gl.DRAW_FRAMEBUFFER, uint32(gl.COLOR_ATTACHMENT0+i), f.colorAttachments[i].(*Texture).id, 0)
-			}
-
-			if len(drawBuffers) > 0 {
-				gl.DrawBuffers(int32(len(drawBuffers)), &drawBuffers[0])
-			} else {
-				gl.DrawBuffer(gl.NONE)
-			}
-			validateCurrentFramebuffer()
-			return nil
-		},
+	// rebuild drawbuffers
+	drawBuffers := make([]uint32, len(f.colorAttachments))
+	for i := range f.colorAttachments {
+		drawBuffers[i] = uint32(gl.COLOR_ATTACHMENT0 + i)
+		gl.FramebufferTexture(gl.DRAW_FRAMEBUFFER, uint32(gl.COLOR_ATTACHMENT0+i), f.colorAttachments[i].(*Texture).id, 0)
 	}
-	renderSystem.Run(cmd, true)
+
+	if len(drawBuffers) > 0 {
+		gl.DrawBuffers(int32(len(drawBuffers)), &drawBuffers[0])
+	} else {
+		gl.DrawBuffer(gl.NONE)
+	}
+	validateCurrentFramebuffer()
 }
 
 // ColorAttachment implements the core.RenderTarger interface

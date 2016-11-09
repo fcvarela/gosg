@@ -122,7 +122,6 @@ func newBuffers() *buffers {
 
 var (
 	sharedBuffers *buffers
-	imguiBuffers  *buffers
 )
 
 // Mesh implements the core.Mesh interface
@@ -148,13 +147,6 @@ func (r *RenderSystem) NewMesh() core.Mesh {
 	m.bounds = core.NewAABB()
 	m.buffers = sharedBuffers
 	return &m
-}
-
-// NewIMGUIMesh implements the core.RenderSystem interface
-func (r *RenderSystem) NewIMGUIMesh() core.IMGUIMesh {
-	imguiMesh := &IMGUIMesh{r.NewMesh().(*Mesh)}
-	imguiMesh.buffers = imguiBuffers
-	return imguiMesh
 }
 
 func bindVAO(vao uint32) {
@@ -195,61 +187,35 @@ func (m *Mesh) Name() string {
 
 // SetPositions implements the core.Mesh interface
 func (m *Mesh) SetPositions(positions []float32) {
-	var cmd = &lambdaRenderCommand{
-		fn: func() error {
-			// the index offset is equal to the number of primitives already in the position buffer
-			m.indexOffset = int32(m.buffers.bufferOffsets[positionBuffer]) / (4 * 3)
-			m.buffers.addData(gl.ARRAY_BUFFER, positionBuffer, len(positions)*4, gl.Ptr(positions))
+	// the index offset is equal to the number of primitives already in the position buffer
+	m.indexOffset = int32(m.buffers.bufferOffsets[positionBuffer]) / (4 * 3)
+	m.buffers.addData(gl.ARRAY_BUFFER, positionBuffer, len(positions)*4, gl.Ptr(positions))
 
-			// grow our bounds
-			for i := 0; i < len(positions); i += 3 {
-				m.bounds.ExtendWithPoint(
-					mgl64.Vec3{
-						float64(positions[i+0]),
-						float64(positions[i+1]),
-						float64(positions[i+2])})
-			}
-
-			return nil
-		},
+	// grow our bounds
+	for i := 0; i < len(positions); i += 3 {
+		m.bounds.ExtendWithPoint(
+			mgl64.Vec3{
+				float64(positions[i+0]),
+				float64(positions[i+1]),
+				float64(positions[i+2])})
 	}
-	renderSystem.Run(cmd, true)
 }
 
 // SetNormals implements the core.Mesh interface
 func (m *Mesh) SetNormals(normals []float32) {
-	var cmd = &lambdaRenderCommand{
-		fn: func() error {
-			m.buffers.addData(gl.ARRAY_BUFFER, normalBuffer, len(normals)*4, gl.Ptr(normals))
-			return nil
-		},
-	}
-	renderSystem.Run(cmd, true)
+	m.buffers.addData(gl.ARRAY_BUFFER, normalBuffer, len(normals)*4, gl.Ptr(normals))
 }
 
 // SetTextureCoordinates implements the core.Mesh interface
 func (m *Mesh) SetTextureCoordinates(texcoords []float32) {
-	var cmd = &lambdaRenderCommand{
-		fn: func() error {
-			m.buffers.addData(gl.ARRAY_BUFFER, texCoordBuffer, len(texcoords)*4, gl.Ptr(texcoords))
-			return nil
-		},
-	}
-	renderSystem.Run(cmd, true)
+	m.buffers.addData(gl.ARRAY_BUFFER, texCoordBuffer, len(texcoords)*4, gl.Ptr(texcoords))
 }
 
 // SetIndices implements the core.Mesh interface
 func (m *Mesh) SetIndices(indices []uint16) {
-	var cmd = &lambdaRenderCommand{
-		fn: func() error {
-			m.indexBufferOffset = int32(m.buffers.bufferOffsets[indexBuffer])
-			m.indexcount = int32(len(indices))
-
-			m.buffers.addData(gl.ELEMENT_ARRAY_BUFFER, indexBuffer, len(indices)*2, gl.Ptr(indices))
-			return nil
-		},
-	}
-	renderSystem.Run(cmd, true)
+	m.indexBufferOffset = int32(m.buffers.bufferOffsets[indexBuffer])
+	m.indexcount = int32(len(indices))
+	m.buffers.addData(gl.ELEMENT_ARRAY_BUFFER, indexBuffer, len(indices)*2, gl.Ptr(indices))
 }
 
 // Draw implements the core.Mesh interface
@@ -272,62 +238,6 @@ func (m *Mesh) DrawInstanced(instanceCount int, instanceData unsafe.Pointer) {
 	gl.DrawElementsInstancedBaseVertex(
 		m.primitiveType, m.indexcount, gl.UNSIGNED_SHORT,
 		gl.PtrOffset(int(m.indexBufferOffset)), int32(instanceCount), m.indexOffset)
-}
-
-// Draw implements the core.IMGUIMesh interface
-func (m *IMGUIMesh) Draw() {
-	bindVAO(m.buffers.vao)
-
-	imguiSystem := core.GetIMGUISystem()
-	drawData := imguiSystem.GetDrawData()
-
-	m.SetPositions([]float32{0.0, 0.0, 0.0})
-	m.SetIndices([]uint16{0})
-
-	gl.EnableVertexAttribArray(0)
-	gl.EnableVertexAttribArray(1)
-	gl.EnableVertexAttribArray(2)
-
-	var lastTexture int32
-	var lastMipmapMode int32
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.GetIntegerv(gl.TEXTURE_BINDING_2D, &lastTexture)
-	gl.GetIntegerv(gl.TEXTURE_MIN_FILTER, &lastMipmapMode)
-
-	for i := 0; i < drawData.CommandListCount(); i++ {
-		cmdlist := drawData.GetCommandList(i)
-
-		gl.BindBuffer(gl.ARRAY_BUFFER, m.buffers.buffers[positionBuffer])
-		gl.BufferData(gl.ARRAY_BUFFER, cmdlist.VertexBufferSize*5*4, cmdlist.VertexPointer, gl.STREAM_DRAW)
-
-		gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.buffers.buffers[indexBuffer])
-		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, cmdlist.IndexBufferSize*2, cmdlist.IndexPointer, gl.STREAM_DRAW)
-
-		// position = 0, tcoords = 1, normals/color = 2
-		gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 5*4, gl.PtrOffset(0))
-		gl.VertexAttribPointer(1, 2, gl.FLOAT, false, 5*4, gl.PtrOffset(8))
-		gl.VertexAttribPointer(2, 4, gl.UNSIGNED_BYTE, true, 5*4, gl.PtrOffset(16))
-
-		var elementIndex int
-		for _, cmd := range cmdlist.Commands {
-			if tex := (*Texture)(cmd.TextureID); tex != nil {
-				gl.BindTexture(gl.TEXTURE_2D, tex.id)
-				gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-			}
-
-			gl.Scissor(
-				int32(cmd.ClipRect[0]),
-				int32(imguiSystem.DisplaySize().Y()-cmd.ClipRect[3]),
-				int32(cmd.ClipRect[2]-cmd.ClipRect[0]),
-				int32(cmd.ClipRect[3]-cmd.ClipRect[1]))
-			gl.DrawElements(m.primitiveType, int32(cmd.ElementCount), gl.UNSIGNED_SHORT, gl.PtrOffset(elementIndex))
-			elementIndex += cmd.ElementCount * 2
-		}
-	}
-
-	gl.BindTexture(gl.TEXTURE_2D, (uint32)(lastTexture))
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, lastMipmapMode)
-	bindVAO(0)
 }
 
 // Lt implements the core.Mesh interface

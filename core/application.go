@@ -108,16 +108,20 @@ func (app *Application) update(dt float64) {
 	// play audio
 	audioSystem.Step()
 
+	// start collecting render commands
+	var commandBuffer = make(chan RenderCommand, 10000)
+
 	// call game object updates
 	sceneManager.update(dt)
 
 	// run the culler
 	sceneManager.cull()
+	sceneManager.draw(commandBuffer)
+	commandBuffer <- nil
 
-	// render the actual scenes
-	sceneManager.draw()
-	renderSystem.CommandQueue() <- nil
-	renderSystem.Flush()
+	// process the command buffer on the main thread
+	renderSystem.ProcessCommandBuffer(commandBuffer)
+	close(commandBuffer)
 
 	// swap context buffers and poll for input
 	windowManager.window.SwapBuffers()

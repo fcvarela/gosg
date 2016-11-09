@@ -142,19 +142,17 @@ func (s *Scene) cull() {
 	}
 }
 
-func (s *Scene) draw() {
-	var globalCommandQueue = renderSystem.CommandQueue()
-
+func (s *Scene) draw(rc chan RenderCommand) {
 	for _, camera := range s.cameraList {
 		if camera.projectionType == PerspectiveProjection {
 			for _, light := range s.lights {
 				if light.Shadower != nil {
-					light.Shadower.Render(light, camera, globalCommandQueue)
+					light.Shadower.Render(light, camera, rc)
 				}
 			}
 		}
 
 		camera.constants.SetData(camera.ProjectionMatrix(), camera.ViewMatrix(), s.lights)
-		camera.renderTechnique(camera, camera.stateBuckets, globalCommandQueue)
+		camera.renderTechnique(camera, camera.stateBuckets, rc)
 	}
 }

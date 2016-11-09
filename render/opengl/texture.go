@@ -2,7 +2,6 @@ package opengl
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"image/draw"
 	_ "image/jpeg" // registers jpeg handler
@@ -81,30 +80,125 @@ func (rs *RenderSystem) NewTextureFromImageData(data []byte, descriptor core.Tex
 	return rs.NewTexture(descriptor, rgba.Pix)
 }
 
-type makeTextureCommand struct {
-	descriptor core.TextureDescriptor
-	data       []byte
-	texture    core.Texture
-}
-
-type setTextureFilterCommand struct {
-	texture core.Texture
-	filter  core.TextureFilter
-}
-
-type setTextureWrapModeCommand struct {
-	texture  core.Texture
-	wrapMode core.TextureWrapMode
-}
-
 // NewTexture implements the core.RenderSystem interface
 func (rs *RenderSystem) NewTexture(d core.TextureDescriptor, data []byte) core.Texture {
-	var cmd = &makeTextureCommand{descriptor: d, data: data}
-	if err := rs.Run(cmd, true); err != nil {
-		glog.Fatal(err)
+	var target = textureTargetFromCore(d.Target)
+
+	// sampling filter
+	var minFilter, magFilter = textureFilterFromCore(d.Filter)
+
+	// sampling wrap mode
+	var wrapMode = textureWrapModeFromCore(d.WrapMode)
+
+	// internal format
+	var internalFormat uint32
+	switch d.SizedFormat {
+	case core.TextureSizedFormatR8:
+		internalFormat = gl.R8
+	case core.TextureSizedFormatR16F:
+		internalFormat = gl.R16F
+	case core.TextureSizedFormatR32F:
+		internalFormat = gl.R32F
+	case core.TextureSizedFormatRG8:
+		internalFormat = gl.RG8
+	case core.TextureSizedFormatRG16F:
+		internalFormat = gl.RG16F
+	case core.TextureSizedFormatRG32F:
+		internalFormat = gl.RG32F
+	case core.TextureSizedFormatRGB8:
+		internalFormat = gl.RGB8
+	case core.TextureSizedFormatRGB16F:
+		internalFormat = gl.RGB16F
+	case core.TextureSizedFormatRGB32F:
+		internalFormat = gl.RGB32F
+	case core.TextureSizedFormatRGBA8:
+		internalFormat = gl.RGBA8
+	case core.TextureSizedFormatRGBA16F:
+		internalFormat = gl.RGBA16F
+	case core.TextureSizedFormatRGBA32F:
+		internalFormat = gl.RGBA32F
+	case core.TextureSizedFormatDEPTH32F:
+		internalFormat = gl.DEPTH_COMPONENT32F
+	default:
+		glog.Fatalf("Texture sized format %v not implemented", d.SizedFormat)
 	}
 
-	return cmd.texture
+	// format of data we're passing
+	var format uint32
+	switch d.Format {
+	case core.TextureFormatR:
+		format = gl.RED
+	case core.TextureFormatRG:
+		format = gl.RG
+	case core.TextureFormatRGB:
+		format = gl.RGB
+	case core.TextureFormatRGBA:
+		format = gl.RGBA
+	case core.TextureFormatDEPTH:
+		format = gl.DEPTH
+	default:
+		glog.Fatalf("Texture format %v not implemented", d.Format)
+	}
+
+	// component type of each channel px
+	var componentType uint32
+	switch d.ComponentType {
+	case core.TextureComponentTypeUNSIGNEDBYTE:
+		componentType = gl.UNSIGNED_BYTE
+	case core.TextureComponentTypeFLOAT:
+		componentType = gl.FLOAT
+	default:
+		glog.Fatalf("Component type %v not implemented", d.Format)
+	}
+
+	// mipmaps
+	var mipmapCount = 0
+	if d.Mipmaps {
+		mipmapCount = int(math.Log2(float64(d.Width)))
+		if d.Height < d.Width {
+			mipmapCount = int(math.Log2(float64(d.Height)))
+		}
+	}
+	mipmapCount++
+
+	// bind the target type
+	texture := uint32(0)
+	gl.GenTextures(1, &texture)
+	gl.BindTexture(target, texture)
+
+	// set filtering
+	gl.TexParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter)
+	gl.TexParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter)
+
+	// set wrap mode
+	gl.TexParameteri(target, gl.TEXTURE_WRAP_S, wrapMode)
+	gl.TexParameteri(target, gl.TEXTURE_WRAP_T, wrapMode)
+
+	// allocate memory
+	gl.TexStorage2D(target, int32(mipmapCount), internalFormat, int32(d.Width), int32(d.Height))
+
+	// set data
+	// this texture's storage has already been allocated, just copy the data
+	if data != nil {
+		gl.TexSubImage2D(
+			target,
+			0,
+			0,
+			0,
+			int32(d.Width),
+			int32(d.Height),
+			format,
+			componentType,
+			gl.Ptr(data))
+
+		if d.Mipmaps {
+			gl.GenerateMipmap(target)
+		}
+	}
+
+	var t = &Texture{texture, d}
+	runtime.SetFinalizer(t, textureCleanup)
+	return t
 }
 
 func textureTargetFromCore(t core.TextureTarget) uint32 {
@@ -152,161 +246,22 @@ func textureWrapModeFromCore(twm core.TextureWrapMode) int32 {
 	return wrapMode
 }
 
-func (rs *RenderSystem) newTexture(cmd *makeTextureCommand) error {
-	var d = cmd.descriptor
-	var target = textureTargetFromCore(d.Target)
-
-	// sampling filter
-	var minFilter, magFilter = textureFilterFromCore(d.Filter)
-
-	// sampling wrap mode
-	var wrapMode = textureWrapModeFromCore(d.WrapMode)
-
-	// internal format
-	var internalFormat uint32
-	switch d.SizedFormat {
-	case core.TextureSizedFormatR8:
-		internalFormat = gl.R8
-	case core.TextureSizedFormatR16F:
-		internalFormat = gl.R16F
-	case core.TextureSizedFormatR32F:
-		internalFormat = gl.R32F
-	case core.TextureSizedFormatRG8:
-		internalFormat = gl.RG8
-	case core.TextureSizedFormatRG16F:
-		internalFormat = gl.RG16F
-	case core.TextureSizedFormatRG32F:
-		internalFormat = gl.RG32F
-	case core.TextureSizedFormatRGB8:
-		internalFormat = gl.RGB8
-	case core.TextureSizedFormatRGB16F:
-		internalFormat = gl.RGB16F
-	case core.TextureSizedFormatRGB32F:
-		internalFormat = gl.RGB32F
-	case core.TextureSizedFormatRGBA8:
-		internalFormat = gl.RGBA8
-	case core.TextureSizedFormatRGBA16F:
-		internalFormat = gl.RGBA16F
-	case core.TextureSizedFormatRGBA32F:
-		internalFormat = gl.RGBA32F
-	case core.TextureSizedFormatDEPTH32F:
-		internalFormat = gl.DEPTH_COMPONENT32F
-	default:
-		return fmt.Errorf("Texture sized format %v not implemented: ", d.SizedFormat)
-	}
-
-	// format of data we're passing
-	var format uint32
-	switch d.Format {
-	case core.TextureFormatR:
-		format = gl.RED
-	case core.TextureFormatRG:
-		format = gl.RG
-	case core.TextureFormatRGB:
-		format = gl.RGB
-	case core.TextureFormatRGBA:
-		format = gl.RGBA
-	case core.TextureFormatDEPTH:
-		format = gl.DEPTH
-	default:
-		return fmt.Errorf("Texture format %v not implemented: ", d.Format)
-	}
-
-	// component type of each channel px
-	var componentType uint32
-	switch d.ComponentType {
-	case core.TextureComponentTypeUNSIGNEDBYTE:
-		componentType = gl.UNSIGNED_BYTE
-	case core.TextureComponentTypeFLOAT:
-		componentType = gl.FLOAT
-	default:
-		return fmt.Errorf("Component type %v not implemented: ", d.Format)
-	}
-
-	// mipmaps
-	var mipmapCount = 0
-	if d.Mipmaps {
-		mipmapCount = int(math.Log2(float64(d.Width)))
-		if d.Height < d.Width {
-			mipmapCount = int(math.Log2(float64(d.Height)))
-		}
-	}
-	mipmapCount++
-
-	// bind the target type
-	texture := uint32(0)
-	gl.GenTextures(1, &texture)
-	gl.BindTexture(target, texture)
-
-	// set filtering
-	gl.TexParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter)
-	gl.TexParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter)
-
-	// set wrap mode
-	gl.TexParameteri(target, gl.TEXTURE_WRAP_S, wrapMode)
-	gl.TexParameteri(target, gl.TEXTURE_WRAP_T, wrapMode)
-
-	// allocate memory
-	gl.TexStorage2D(target, int32(mipmapCount), internalFormat, int32(d.Width), int32(d.Height))
-
-	// set data
-	// this texture's storage has already been allocated, just copy the data
-	if cmd.data != nil {
-		gl.TexSubImage2D(
-			target,
-			0,
-			0,
-			0,
-			int32(d.Width),
-			int32(d.Height),
-			format,
-			componentType,
-			gl.Ptr(cmd.data))
-
-		if d.Mipmaps {
-			gl.GenerateMipmap(target)
-		}
-	}
-
-	cmd.texture = &Texture{texture, d}
-	runtime.SetFinalizer(cmd.texture, textureCleanup)
-	return nil
-}
-
 // SetFilter sets this texture filtering mode
 func (t *Texture) SetFilter(f core.TextureFilter) {
-	var cmd = &setTextureFilterCommand{texture: t, filter: f}
-	if err := renderSystem.Run(cmd, true); err != nil {
-		glog.Fatal(err)
-	}
-}
-
-func (t *Texture) setFilter(f core.TextureFilter) error {
 	var target = textureTargetFromCore(t.descriptor.Target)
 	var minFilter, magFilter = textureFilterFromCore(f)
 
 	gl.BindTexture(target, t.id)
 	gl.TexParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter)
 	gl.TexParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter)
-
-	return nil
 }
 
 // SetWrapMode sets this texture's wrap mode
 func (t *Texture) SetWrapMode(wm core.TextureWrapMode) {
-	var cmd = &setTextureWrapModeCommand{texture: t, wrapMode: wm}
-	if err := renderSystem.Run(cmd, true); err != nil {
-		glog.Fatal(err)
-	}
-}
-
-func (t *Texture) setWrapMode(twm core.TextureWrapMode) error {
 	var target = textureTargetFromCore(t.descriptor.Target)
-	var wrapMode = textureWrapModeFromCore(twm)
+	var wrapMode = textureWrapModeFromCore(wm)
 
 	gl.BindTexture(target, t.id)
 	gl.TexParameteri(target, gl.TEXTURE_WRAP_S, wrapMode)
 	gl.TexParameteri(target, gl.TEXTURE_WRAP_T, wrapMode)
-
-	return nil
 }

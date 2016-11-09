@@ -34,11 +34,6 @@ type Mesh interface {
 	Gt(Mesh) bool
 }
 
-// IMGUIMesh is an interface which wraps a Mesh used for IMGUI primitives.
-type IMGUIMesh interface {
-	Mesh
-}
-
 var (
 	aabbMesh Mesh
 )

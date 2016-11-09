@@ -143,26 +143,12 @@ func GetIMGUISystem() IMGUISystem {
 	return imguiSystem
 }
 
-func newImguiNode(name string) *Node {
-	node := NewNode(name)
-	node.lightExtractor = nil
-	node.physicsComponent = nil
-	node.SetCullComponent(new(AlwaysPassCuller))
-	node.state = resourceManager.State("imgui")
-	node.materialData = NewDescriptors()
-	mesh := renderSystem.NewIMGUIMesh()
-	mesh.SetName("IMGUI")
-	mesh.SetPrimitiveType(PrimitiveTypeTriangles)
-	node.SetMesh(mesh)
-
-	return node
-
-}
-
 // NewIMGUIScene returns a Scene which draws a UI. Users will want to use this to display a UI on top of
 // other scenes.
 func NewIMGUIScene(name string, inputComponent InputComponent) *Scene {
 	s := NewScene(name)
+	s.SetRoot(NewNode("root"))
+	s.Root().SetInputComponent(inputComponent)
 
 	size := windowManager.WindowSize()
 	camera := NewCamera("MainMenuCamera", OrthographicProjection)
@@ -175,18 +161,11 @@ func NewIMGUIScene(name string, inputComponent InputComponent) *Scene {
 	camera.SetRenderOrder(0)
 	camera.Reshape(mgl32.Vec2{size.X(), size.Y()})
 
-	// node root
-	node := newImguiNode("MainMenu")
-	node.SetInputComponent(inputComponent)
-
 	// set camera's scene
-	camera.SetScene(node)
-
-	// add node graph to scene root
-	s.SetRoot(node)
+	camera.SetScene(s.root)
 
 	// add camera to root node
-	s.AddCamera(node, camera)
+	s.AddCamera(s.root, camera)
 
 	return s
 }
@@ -200,8 +179,5 @@ func IMGUIRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*N
 
 	var imguiState = resourceManager.State("imgui")
 	cmdBuf <- &BindStateCommand{imguiState}
-	for _, nodes := range materialBuckets {
-		cmdBuf <- &BindDescriptorsCommand{Descriptors: &nodes[0].materialData}
-		cmdBuf <- &DrawCommand{Mesh: nodes[0].mesh}
-	}
+	cmdBuf <- &DrawIMGUICommand{}
 }

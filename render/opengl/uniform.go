@@ -31,21 +31,11 @@ func (r *RenderSystem) NewUniform() core.Uniform {
 	return &Uniform{nil}
 }
 
-func (r *RenderSystem) makeUniformBuffer(cmd *makeUniformBufferCommand) error {
-	ub := &UniformBuffer{}
-	gl.GenBuffers(1, &ub.id)
-	cmd.ub = ub
-	return nil
-}
-
 // NewUniformBuffer implements the core.RenderSystem interface
 func (r *RenderSystem) NewUniformBuffer() core.UniformBuffer {
-	var cmd = &makeUniformBufferCommand{}
-	if err := r.Run(cmd, true); err != nil {
-		glog.Fatal(err)
-	}
-
-	return cmd.ub
+	ub := &UniformBuffer{}
+	gl.GenBuffers(1, &ub.id)
+	return ub
 }
 
 // Set implements the core.Uniform interface
@@ -90,15 +80,9 @@ func (u *Uniform) Copy() core.Uniform {
 
 // Set implements the core.UniformBuffer interface
 func (ub *UniformBuffer) Set(data unsafe.Pointer, dataLen int) {
-	var cmd = &lambdaRenderCommand{
-		fn: func() error {
-			gl.BindBuffer(gl.UNIFORM_BUFFER, ub.id)
-			gl.BufferData(gl.UNIFORM_BUFFER, dataLen, nil, gl.DYNAMIC_DRAW)
-			gl.BufferData(gl.UNIFORM_BUFFER, dataLen, data, gl.DYNAMIC_DRAW)
-			return nil
-		},
-	}
-	renderSystem.Run(cmd, true)
+	gl.BindBuffer(gl.UNIFORM_BUFFER, ub.id)
+	gl.BufferData(gl.UNIFORM_BUFFER, dataLen, nil, gl.DYNAMIC_DRAW)
+	gl.BufferData(gl.UNIFORM_BUFFER, dataLen, data, gl.DYNAMIC_DRAW)
 }
 
 // Lt implements the core.UniformBuffer interface

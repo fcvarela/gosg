@@ -6,15 +6,9 @@ import (
 	"github.com/golang/glog"
 )
 
-type lambdaRenderCommand struct {
-	core.RenderCommand
-	fn func() error
-}
-
 // RenderSystem implements the core.RenderSystem interface
 type RenderSystem struct {
-	commandQueue chan core.RenderCommand
-	renderLog    string
+	renderLog string
 }
 
 func init() {
@@ -28,33 +22,16 @@ var (
 // New returns a new RenderSystem
 func New() *RenderSystem {
 	renderSystem = &RenderSystem{
-		commandQueue: make(chan (core.RenderCommand), 1000),
-		renderLog:    "",
+		renderLog: "",
 	}
 
 	return renderSystem
 }
 
-// CommandQueue returns the RenderSystem commandQueue
-func (r *RenderSystem) CommandQueue() chan core.RenderCommand {
-	return r.commandQueue
-}
-
-// Run implements the core.RenderSystem interface
-func (r *RenderSystem) Run(cmd core.RenderCommand, sync bool) error {
-	if sync {
-		return r.dispatchCommand(cmd)
-	}
-
-	// default
-	r.commandQueue <- cmd
-	return nil
-}
-
-// Flush implements the core.RenderSystem interface
-func (r *RenderSystem) Flush() {
+// ProcessCommandBuffer implements the core.RenderSystem interface
+func (r *RenderSystem) ProcessCommandBuffer(rc chan core.RenderCommand) {
 	for {
-		var cmd = <-r.commandQueue
+		var cmd = <-rc
 		if cmd == nil {
 			break
 		}
@@ -73,6 +50,8 @@ func (r *RenderSystem) dispatchCommand(cmd core.RenderCommand) error {
 		return r.drawInstanced(t)
 	case *core.DrawCommand:
 		return r.draw(t)
+	case *core.DrawIMGUICommand:
+		return r.drawIMGUI(t)
 	case *core.BindDescriptorsCommand:
 		return r.bindDescriptors(t)
 	case *core.BindStateCommand:
@@ -88,20 +67,6 @@ func (r *RenderSystem) dispatchCommand(cmd core.RenderCommand) error {
 		return r.setFramebuffer(t)
 	case *core.SetViewportCommand:
 		return r.setViewport(t)
-	case *makeTextureCommand:
-		return r.newTexture(t)
-	case *setTextureFilterCommand:
-		return t.texture.(*Texture).setFilter(t.filter)
-	case *setTextureWrapModeCommand:
-		return t.texture.(*Texture).setWrapMode(t.wrapMode)
-	case *makeUniformBufferCommand:
-		return r.makeUniformBuffer(t)
-	case *makeFramebufferCommand:
-		return r.makeFramebuffer(t)
-	case *makeProgramCommand:
-		return r.makeProgram(t)
-	case *lambdaRenderCommand:
-		return t.fn()
 	default:
 		glog.Errorf("Unsupported command type: %T", t)
 	}

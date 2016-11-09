@@ -85,11 +85,10 @@ func (r *ResourceSystem) loadResource(name, rtype string) []byte {
 	fullpath := filepath.Join(r.paths[rtype][1], name)
 	res, err := r.resourceWithFullpath(fullpath)
 	if err != nil {
-		glog.Error(err)
 		fullpath = filepath.Join(r.paths[rtype][0], name)
 		res, err := r.resourceWithFullpath(fullpath)
 		if err != nil {
-			glog.Error(err)
+			glog.Fatal(err)
 		}
 		return res
 	}

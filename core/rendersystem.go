@@ -58,6 +58,10 @@ type DrawInstancedCommand struct {
 	ModelMatrices unsafe.Pointer
 }
 
+// DrawIMGUICommand draws an IMGUI
+type DrawIMGUICommand struct {
+}
+
 // DrawCommand draws a mesh
 type DrawCommand struct {
 	Mesh Mesh
@@ -77,9 +81,6 @@ type RenderSystem interface {
 
 	// NewMesh retuns a new mesh.
 	NewMesh() Mesh
-
-	// NewIMGUIMesh returns a new IMGUI mesh.
-	NewIMGUIMesh() IMGUIMesh
 
 	// ProgramExtension exposes the resource extension of program definitions for the implementation.
 	ProgramExtension() string
@@ -105,14 +106,8 @@ type RenderSystem interface {
 	// NewFramebuffer returns a newly created framebuffer
 	NewFramebuffer() Framebuffer
 
-	// Run runs a command. When sync is true, the call blocks for a return error. Async always returns nil
-	Run(cmd RenderCommand, sync bool) error
-
-	// CommandQueue returns the command queue that the rendersystem consumes every frame
-	CommandQueue() chan RenderCommand
-
-	// FlushQueue tells the renderSystem to flush its queue until it gets a nil command
-	Flush()
+	// ProcessCommandBuffer tells the renderSystem to flush its queue until it gets a nil command
+	ProcessCommandBuffer(chan RenderCommand)
 
 	// CanBatch returns whether two nodes can be batched in the same drawcall
 	CanBatch(a *Descriptors, b *Descriptors) bool

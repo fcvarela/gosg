@@ -64,10 +64,10 @@ func (sm *SceneManager) cull() {
 	}
 }
 
-func (sm *SceneManager) draw() {
+func (sm *SceneManager) draw(rc chan RenderCommand) {
 	for _, s := range sm.managedScenes {
 		if s.active {
-			s.draw()
+			s.draw(rc)
 		}
 	}
 }

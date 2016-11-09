@@ -34,13 +34,6 @@ type programSpec struct {
 	SamplerBindings       map[string]uint32 `json:"samplerBindings"`
 }
 
-type makeProgramCommand struct {
-	core.RenderCommand
-	name    string
-	data    []byte
-	program *Program
-}
-
 func programCleanup(p *Program) {
 	glog.Infof("Finalizer called for program: %v\n", p)
 }
@@ -62,15 +55,16 @@ func (r *RenderSystem) ProgramExtension() string {
 	return "gl.json"
 }
 
-func (r *RenderSystem) makeProgram(cmd *makeProgramCommand) error {
+// NewProgram implements the core.RenderSystem interface.
+func (r *RenderSystem) NewProgram(name string, data []byte) core.Program {
 	var spec programSpec
-	if err := json.Unmarshal(cmd.data, &spec); err != nil {
+	if err := json.Unmarshal(data, &spec); err != nil {
 		glog.Fatal("Error reading program spec: ", err)
 	}
 
 	// create program
 	prog := &Program{
-		cmd.name,
+		name,
 		0,
 		make(map[string]*shader),
 		"",
@@ -145,17 +139,7 @@ func (r *RenderSystem) makeProgram(cmd *makeProgramCommand) error {
 	}
 
 	prog.dirtySamplerBindings = true
-	cmd.program = prog
-	return nil
-}
-
-// NewProgram implements the core.RenderSystem interface.
-func (r *RenderSystem) NewProgram(name string, data []byte) core.Program {
-	var cmd = &makeProgramCommand{name: name, data: data}
-	if err := r.Run(cmd, true); err != nil {
-		glog.Fatal(err)
-	}
-	return cmd.program
+	return prog
 }
 
 func (p *Program) extractUniformNames() {
