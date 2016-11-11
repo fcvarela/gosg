@@ -132,6 +132,6 @@ func (r *RenderSystem) draw(cmd *core.DrawCommand) error {
 }
 
 func (r *RenderSystem) drawInstanced(cmd *core.DrawInstancedCommand) error {
-	cmd.Mesh.DrawInstanced(cmd.InstanceCount, cmd.ModelMatrices)
+	cmd.Mesh.DrawInstanced(cmd.InstanceCount, cmd.InstanceData)
 	return nil
 }

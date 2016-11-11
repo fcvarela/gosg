@@ -27,10 +27,11 @@ layout (location =  0) in vec3 position_in;
 layout (location =  1) in vec3 normal_in;
 layout (location =  2) in vec3 tcoords0_in;
 layout (location =  3) in mat4 mMatrix;
-layout (location =  7) in vec4 custom1;
-layout (location =  8) in vec4 custom2;
-layout (location =  9) in vec4 custom3;
-layout (location = 10) in vec4 custom4;
+layout (location =  7) in mat4 mvpMatrix;
+layout (location = 11) in vec4 custom1;
+layout (location = 12) in vec4 custom2;
+layout (location = 13) in vec4 custom3;
+layout (location = 14) in vec4 custom4;
 
 out vec3 position;
 out vec3 cameraPosition;
@@ -39,7 +40,7 @@ out mat3 tbn;
 
 void main() {
     // clip position
-    gl_Position = vpMatrix * mMatrix * vec4(position_in, 1.0);
+    gl_Position = mvpMatrix * vec4(position_in, 1.0);
 
     // world position & camera world position
     position = (mMatrix * vec4(position_in, 1.0)).xyz;

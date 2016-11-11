@@ -132,7 +132,7 @@ func (s *ShadowMap) renderCascade(cascade int, light *Light, camera *Camera, cmd
 
 		cmdBuf <- &BindStateCommand{resourceManager.State("shadow")}
 		cmdBuf <- &BindUniformBufferCommand{"cameraConstants", shadowCam.constants.buffer}
-		RenderBatchedNodes(nodeBucket, cmdBuf)
+		RenderBatchedNodes(shadowCam, nodeBucket, cmdBuf)
 	}
 }
 

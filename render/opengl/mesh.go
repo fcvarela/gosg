@@ -99,7 +99,7 @@ func newBuffers() *buffers {
 	gl.VertexAttribPointer(6, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(3*16))
 	gl.VertexAttribDivisor(6, 1)
 
-	// custom data
+	// modelviewprojection matrices
 	gl.EnableVertexAttribArray(7)
 	gl.VertexAttribPointer(7, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(4*16))
 	gl.VertexAttribDivisor(7, 1)
@@ -115,6 +115,23 @@ func newBuffers() *buffers {
 	gl.EnableVertexAttribArray(10)
 	gl.VertexAttribPointer(10, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(7*16))
 	gl.VertexAttribDivisor(10, 1)
+
+	// custom data
+	gl.EnableVertexAttribArray(11)
+	gl.VertexAttribPointer(11, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(8*16))
+	gl.VertexAttribDivisor(11, 1)
+
+	gl.EnableVertexAttribArray(12)
+	gl.VertexAttribPointer(12, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(9*16))
+	gl.VertexAttribDivisor(12, 1)
+
+	gl.EnableVertexAttribArray(13)
+	gl.VertexAttribPointer(13, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(10*16))
+	gl.VertexAttribDivisor(13, 1)
+
+	gl.EnableVertexAttribArray(14)
+	gl.VertexAttribPointer(14, 4, gl.FLOAT, false, core.InstanceDataLen, gl.PtrOffset(11*16))
+	gl.VertexAttribDivisor(14, 1)
 
 	bindVAO(0)
 	return bf

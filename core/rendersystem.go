@@ -55,7 +55,7 @@ type BindDescriptorsCommand struct {
 type DrawInstancedCommand struct {
 	Mesh          Mesh
 	InstanceCount int
-	ModelMatrices unsafe.Pointer
+	InstanceData  unsafe.Pointer
 }
 
 // DrawIMGUICommand draws an IMGUI
@@ -116,13 +116,6 @@ type RenderSystem interface {
 	RenderLog() string
 }
 
-// RenderPass represents one operation of rendering a set of nodes with a given rasterstate and a program
-type RenderPass struct {
-	Nodes []*Node
-	Name  string
-	State *protos.State
-}
-
 var (
 	renderSystem RenderSystem
 )
@@ -131,8 +124,9 @@ var (
 // populated by all the included RenderTechniques. Use node.GetInstanceData() to change its custom
 // values
 type InstanceData struct {
-	ModelMatrix mgl32.Mat4
-	Custom      [4]mgl32.Vec4
+	ModelMatrix               mgl32.Mat4
+	ModelViewProjectionMatrix mgl32.Mat4
+	Custom                    [4]mgl32.Vec4
 }
 
 const (
@@ -140,7 +134,7 @@ const (
 	MaxInstances = 2000
 
 	// InstanceDataLen is the byte size of an InstanceData value
-	InstanceDataLen = (1*16 + 4*4) * 4
+	InstanceDataLen = (2*16 + 4*4) * 4
 )
 
 // SetRenderSystem is meant to be called from RenderSystem implementations on their init method
@@ -172,7 +166,7 @@ func DefaultRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]
 		var zpassState = resourceManager.State(fmt.Sprintf("%s-z", nodes[0].state.Name))
 		cmdBuf <- &BindStateCommand{zpassState}
 		cmdBuf <- &BindUniformBufferCommand{"cameraConstants", camera.constants.buffer}
-		RenderBatchedNodes(nodes, cmdBuf)
+		RenderBatchedNodes(camera, nodes, cmdBuf)
 	}
 
 	// draw opaque pass
@@ -186,7 +180,7 @@ func DefaultRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]
 
 		cmdBuf <- &BindStateCommand{nodes[0].state}
 		cmdBuf <- &BindUniformBufferCommand{"cameraConstants", camera.constants.buffer}
-		RenderBatchedNodes(nodes, cmdBuf)
+		RenderBatchedNodes(camera, nodes, cmdBuf)
 	}
 
 	// transparent pass
@@ -200,7 +194,7 @@ func DefaultRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]
 		//sort.Sort(sort.Reverse(NodesByCameraDistanceNearToFar{nodes, camera.node}))
 		cmdBuf <- &BindStateCommand{nodes[0].state}
 		cmdBuf <- &BindUniformBufferCommand{"cameraConstants", camera.constants.buffer}
-		RenderBatchedNodes(nodes, cmdBuf)
+		RenderBatchedNodes(camera, nodes, cmdBuf)
 	}
 }
 
@@ -223,7 +217,7 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*No
 			var transform32 = Mat4DoubleToFloat(transform64)
 			instanceData[i].ModelMatrix = transform32
 		}
-		cmdBuf <- &DrawInstancedCommand{Mesh: AABBMesh(), InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&instanceData)}
+		cmdBuf <- &DrawInstancedCommand{Mesh: AABBMesh(), InstanceCount: len(nodes), InstanceData: unsafe.Pointer(&instanceData)}
 	}
 }
 
@@ -235,32 +229,35 @@ func DebugRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*N
 
 // RenderBatchedNodes splits a list of nodes into batched items per buffers and streams draw calls
 // It assumes all batches share materials and should be used long with Mater
-func RenderBatchedNodes(nodes []*Node, cmdBuf chan RenderCommand) {
+func RenderBatchedNodes(camera *Camera, nodes []*Node, cmdBuf chan RenderCommand) {
 	var lastBatchIndex = 0
 	for i := 1; i < len(nodes); i++ {
 		if renderSystem.CanBatch(nodes[i].MaterialData(), nodes[i-1].MaterialData()) {
-			RenderBatch(nodes[lastBatchIndex:i], cmdBuf)
+			RenderBatch(camera, nodes[lastBatchIndex:i], cmdBuf)
 			lastBatchIndex = i
 		}
 	}
 
 	// close last batch
-	RenderBatch(nodes[lastBatchIndex:], cmdBuf)
+	RenderBatch(camera, nodes[lastBatchIndex:], cmdBuf)
 }
 
 // RenderBatch renders a batch of drawables sharing the same state and descriptors
-func RenderBatch(nodes []*Node, cmdBuf chan RenderCommand) {
+func RenderBatch(camera *Camera, nodes []*Node, cmdBuf chan RenderCommand) {
 	if len(nodes) == 0 {
 		return
 	}
 
 	var instanceData [MaxInstances]InstanceData
 	for i, n := range nodes {
-		transform64 := n.WorldTransform()
-		transform32 := Mat4DoubleToFloat(transform64)
-		instanceData[i].ModelMatrix = transform32
+		mMatrix64 := n.WorldTransform()
+		mvpMatrix64 := camera.projectionMatrix.Mul4(camera.viewMatrix.Mul4(mMatrix64))
+		mMatrix32 := Mat4DoubleToFloat(mMatrix64)
+		mvpMatrix32 := Mat4DoubleToFloat(mvpMatrix64)
+		instanceData[i].ModelMatrix = mMatrix32
+		instanceData[i].ModelViewProjectionMatrix = mvpMatrix32
 		instanceData[i].Custom = n.materialData.instanceData
 	}
 	cmdBuf <- &BindDescriptorsCommand{Descriptors: &nodes[0].materialData}
-	cmdBuf <- &DrawInstancedCommand{Mesh: nodes[0].mesh, InstanceCount: len(nodes), ModelMatrices: unsafe.Pointer(&instanceData)}
+	cmdBuf <- &DrawInstancedCommand{Mesh: nodes[0].mesh, InstanceCount: len(nodes), InstanceData: unsafe.Pointer(&instanceData)}
 }
