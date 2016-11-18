@@ -1,4 +1,5 @@
-#version 410 core
+#version 330 core
+#extension GL_ARB_gpu_shader_fp64 : require
 
 #define MAX_CASCADES 10
 #define MAX_LIGHTS 16

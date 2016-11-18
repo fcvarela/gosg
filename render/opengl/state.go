@@ -3,7 +3,7 @@ package opengl
 import (
 	"github.com/fcvarela/gosg/core"
 	"github.com/fcvarela/gosg/protos"
-	"github.com/go-gl/gl/v4.1-core/gl"
+	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
 var (
@@ -117,23 +117,18 @@ func bindState(state *protos.State, force bool) {
 
 // CanBatch determines whether or not two states can be batched
 func (r *RenderSystem) CanBatch(a *core.Descriptors, b *core.Descriptors) bool {
-	for name := range b.Textures() {
+	for name, tb := range b.Textures() {
 		ta, ok := a.Textures()[name]
 		if !ok {
-			return true
-		}
-
-		tb, ok := b.Textures()[name]
-		if !ok {
-			return true
+			return false
 		}
 
 		if ta.(*Texture).id != tb.(*Texture).id {
-			return true
+			return false
 		}
 	}
 
-	return false
+	return true
 }
 
 func bindTextures(p *Program, md *core.Descriptors) {

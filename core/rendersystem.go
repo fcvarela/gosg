@@ -232,7 +232,7 @@ func DebugRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*N
 func RenderBatchedNodes(camera *Camera, nodes []*Node, cmdBuf chan RenderCommand) {
 	var lastBatchIndex = 0
 	for i := 1; i < len(nodes); i++ {
-		if renderSystem.CanBatch(nodes[i].MaterialData(), nodes[i-1].MaterialData()) {
+		if !renderSystem.CanBatch(nodes[i].MaterialData(), nodes[i-1].MaterialData()) {
 			RenderBatch(camera, nodes[lastBatchIndex:i], cmdBuf)
 			lastBatchIndex = i
 		}
