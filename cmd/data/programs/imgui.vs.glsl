@@ -1,5 +1,4 @@
 #version 330 core
-#extension GL_ARB_gpu_shader_fp64 : require
 
 #define MAX_CASCADES 10
 #define MAX_LIGHTS 16
@@ -13,9 +12,6 @@ struct light {
 };
 
 layout (std140) uniform cameraConstants {
-    dmat4 dvMatrix;
-    dmat4 dpMatrix;
-    dmat4 dvpMatrix;
     mat4 vMatrix;
     mat4 pMatrix;
     mat4 vpMatrix;
