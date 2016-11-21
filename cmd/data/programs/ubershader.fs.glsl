@@ -76,7 +76,7 @@ float shadow(vec4 coords, int lightIndex) {
         shadowMapCoords[i] = ccoords.xyz/ccoords.w;
     }
 
-    float fragZV = length(cameraPosition-position);
+    float fragZV = gl_FragCoord.z/gl_FragCoord.w;
 
     if (fragZV < lights[lightIndex].zCuts[0].x) {
         return varianceShadowMap(shadowTex0, shadowMapCoords[0].xy, shadowMapCoords[0].z);
