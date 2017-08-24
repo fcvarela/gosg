@@ -1,0 +1,13 @@
+{
+  "shaders": {
+    "vertex": "fxaa.vs.glsl",
+    "fragment": "fxaa.fs.glsl"
+  },
+  "uniformBufferBindings": {
+    "cameraConstants": 0,
+    "nodeBlock": 1
+  },
+  "samplerBindings": {
+    "colorTexture": 1
+  }
+}

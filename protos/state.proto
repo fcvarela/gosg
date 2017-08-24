@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package protos;
+
+message State {
+    string name = 1;
+    string programName = 2;
+
+    enum Cullface {
+        CULL_BACK = 0;
+        CULL_FRONT = 1;
+        CULL_BOTH = 2;
+    }
+    bool culling = 3;
+    Cullface cullFace = 4;
+
+    enum BlendMode {
+        BLEND_SRC_ALPHA = 0;
+        BLEND_ONE_MINUS_SRC_ALPHA = 1;
+        BLEND_ONE = 2;
+    }
+    enum BlendEquation {
+        BLEND_FUNC_ADD = 0;
+        BLEND_FUNC_MAX = 1;
+    }
+    bool blending = 5;
+    BlendMode blend_src_mode = 6;
+    BlendMode blend_dst_mode = 7;
+    BlendEquation blend_equation = 8;
+    
+    enum DepthFunc {
+        DEPTH_LESS_EQUAL = 0;
+        DEPTH_LESS = 1;
+        DEPTH_EQUAL = 2;
+    }
+    bool depth_test = 9;
+    bool depth_write = 10;
+    DepthFunc depth_func = 11;
+    
+    bool color_write = 12;
+    bool scissor_test = 13;
+}

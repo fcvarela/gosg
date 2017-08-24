@@ -1,0 +1,10 @@
+{
+  "shaders": {
+    "vertex": "zpass.vs.glsl",
+    "fragment": "zpass.fs.glsl"
+  },
+  "uniformBufferBindings": {
+    "cameraConstants": 0,
+    "nodeBlock": 1
+  }
+}
