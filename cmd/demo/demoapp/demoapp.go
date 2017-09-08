@@ -7,7 +7,6 @@ import (
 
 type demoApp struct {
 	done           bool
-	sceneManager   *core.SceneManager
 	inputComponent core.ClientApplicationInputComponent
 }
 

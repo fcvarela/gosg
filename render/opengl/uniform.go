@@ -22,10 +22,6 @@ type UniformBuffer struct {
 	id uint32
 }
 
-type makeUniformBufferCommand struct {
-	ub core.UniformBuffer
-}
-
 // NewUniform implements the core.RenderSystem interface
 func (r *RenderSystem) NewUniform() core.Uniform {
 	return &Uniform{nil}

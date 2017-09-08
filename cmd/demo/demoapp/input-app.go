@@ -13,12 +13,12 @@ func (ic *applicationInputComponent) Run() (commands []core.ClientApplicationCom
 	// check for quit key, append to command list
 	state := *core.GetInputManager().State()
 
-	if state.Keys.Active[glfw.KeyEscape] == true {
+	if state.Keys.Active[glfw.KeyEscape] {
 		commands = append(commands, new(clientApplicationQuitCommand))
 	}
 
 	// key-up, after down
-	if state.Keys.Released[glfw.KeyE] == true {
+	if state.Keys.Released[glfw.KeyE] {
 		commands = append(commands, new(clientApplicationToggleDebugMenuCommand))
 	}
 

@@ -1,9 +1,8 @@
 package core
 
 import (
-	"math"
-
 	"fmt"
+	"math"
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
@@ -142,6 +141,4 @@ func (s *ShadowMap) Render(light *Light, cam *Camera) {
 	for c := 0; c < numCascades; c++ {
 		s.renderCascade(c, light, cam)
 	}
-
-	return
 }

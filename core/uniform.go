@@ -2,7 +2,7 @@ package core
 
 import "unsafe"
 
-// Uniform is an interface which wraps program Uniforms. This will be replaced by PushConstants.
+// Uniform is an interface which wraps program Uniforms
 type Uniform interface {
 
 	// Value returns the Uniform's value
@@ -15,7 +15,7 @@ type Uniform interface {
 	Copy() Uniform
 }
 
-// UniformBuffer is an interface which wraps program UniformBuffers. This will be replaced by ConstantBuffers.
+// UniformBuffer is an interface which wraps program UniformBuffers
 type UniformBuffer interface {
 	Set(unsafe.Pointer, int)
 

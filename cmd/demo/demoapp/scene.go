@@ -58,19 +58,14 @@ func makeGeometrySubscene() (*core.Node, *core.Camera) {
 
 	geometryNode := core.NewNode("GeometryRoot")
 
-	for i := -5; i < 5; i++ {
-		for j := -5; j < 5; j++ {
+	for i := -12; i < 12; i++ {
+		for j := -12; j < 12; j++ {
 			randomVec := mgl64.Vec3{float64(i) * 9.96 * 2.0, float64(j) * 9.96 * 2.0, 0.0}
 
 			// load model
 			f16 := core.GetResourceManager().Model("f16.model")
 			f16.Translate(randomVec)
 			f16.Rotate(float64(i), randomVec)
-
-			// set aabb on subnodes
-			//for _, c := range f16.Children() {
-			//	c.State().AABB = true
-			//}
 
 			// add model to scenegraph
 			geometryNode.AddChild(f16)

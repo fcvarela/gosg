@@ -9,7 +9,7 @@ var (
 	imguiBuffers *buffers
 )
 
-func (r *RenderSystem) drawIMGUI(cmd *core.DrawIMGUICommand) error {
+func (r *RenderSystem) drawIMGUI(cmd *core.DrawIMGUICommand) {
 	bindVAO(imguiBuffers.vao)
 
 	imguiSystem := core.GetIMGUISystem()
@@ -59,6 +59,4 @@ func (r *RenderSystem) drawIMGUI(cmd *core.DrawIMGUICommand) error {
 	gl.BindTexture(gl.TEXTURE_2D, (uint32)(lastTexture))
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, lastMipmapMode)
 	bindVAO(0)
-
-	return nil
 }

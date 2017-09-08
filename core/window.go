@@ -21,7 +21,6 @@ type WindowConfig struct {
 type WindowManager struct {
 	window         *glfw.Window
 	cfg            WindowConfig
-	active         bool
 	cursorPosition mgl64.Vec2
 }
 

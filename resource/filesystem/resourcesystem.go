@@ -76,7 +76,7 @@ func New() *ResourceSystem {
 func (r *ResourceSystem) resourceWithFullpath(fullpath string) ([]byte, error) {
 	data, e := ioutil.ReadFile(fullpath)
 	if e != nil {
-		return nil, fmt.Errorf("Could not read file: %v\n", e)
+		return nil, fmt.Errorf("could not read file: %v", e)
 	}
 	return data, nil
 }
@@ -86,7 +86,7 @@ func (r *ResourceSystem) loadResource(name, rtype string) []byte {
 	res, err := r.resourceWithFullpath(fullpath)
 	if err != nil {
 		fullpath = filepath.Join(r.paths[rtype][0], name)
-		res, err := r.resourceWithFullpath(fullpath)
+		res, err = r.resourceWithFullpath(fullpath)
 		if err != nil {
 			glog.Fatal(err)
 		}

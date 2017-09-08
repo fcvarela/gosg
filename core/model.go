@@ -79,7 +79,7 @@ func bytesToFloat(b []byte) []float32 {
 func bytesToShort(b []byte) []uint16 {
 	data := make([]uint16, len(b)/2)
 	for i := range data {
-		data[i] = uint16(binary.LittleEndian.Uint16(b[i*2 : (i+1)*2]))
+		data[i] = binary.LittleEndian.Uint16(b[i*2 : (i+1)*2])
 	}
 	return data
 }
