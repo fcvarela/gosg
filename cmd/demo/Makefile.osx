@@ -3,20 +3,31 @@ APPBUNDLE=$(APPNAME).app
 APPBUNDLECONTENTS=$(APPBUNDLE)/Contents
 APPBUNDLEEXE=$(APPBUNDLECONTENTS)/MacOS
 APPBUNDLERESOURCES=$(APPBUNDLECONTENTS)/Resources
-APPBUNDLEICON=$(APPBUNDLECONTENTS)/Resources
+APPBUNDLEFRAMEWORKS=$(APPBUNDLECONTENTS)/Frameworks
 
-appbundle: macosx/$(APPNAME).icns demo
+LIBBULLETSOFTBODY=libBulletSoftBody.2.87.dylib
+LIBBULLETDYNAMICS=libBulletDynamics.2.87.dylib
+LIBBULLETCOLLISION=libBulletCollision.2.87.dylib
+LIBLINEARMATH=libLinearMath.2.87.dylib
+
+$(APPBUNDLE): macosx/$(APPNAME).icns demo
 	rm -rf $(APPBUNDLE)
 	mkdir $(APPBUNDLE)
-	mkdir $(APPBUNDLE)/Contents
-	mkdir $(APPBUNDLE)/Contents/MacOS
-	mkdir $(APPBUNDLE)/Contents/Resources
+	mkdir $(APPBUNDLECONTENTS)
+	mkdir $(APPBUNDLEEXE)
+	mkdir $(APPBUNDLERESOURCES)
+	mkdir $(APPBUNDLEFRAMEWORKS)
 	cp macosx/Info.plist $(APPBUNDLECONTENTS)/
 	cp macosx/PkgInfo $(APPBUNDLECONTENTS)/
-	cp macosx/$(APPNAME).icns $(APPBUNDLEICON)/
+	cp macosx/$(APPNAME).icns $(APPBUNDLERESOURCES)/
 	install_name_tool -add_rpath "@executable_path/../Frameworks" demo
+	install_name_tool -change /usr/local/opt/bullet/lib/$(LIBBULLETSOFTBODY) @executable_path/../Frameworks/$(LIBBULLETSOFTBODY) demo
+	install_name_tool -change /usr/local/opt/bullet/lib/$(LIBBULLETDYNAMICS) @executable_path/../Frameworks/$(LIBBULLETDYNAMICS) demo
+	install_name_tool -change /usr/local/opt/bullet/lib/$(LIBBULLETCOLLISION) @executable_path/../Frameworks/$(LIBBULLETCOLLISION) demo
+	install_name_tool -change /usr/local/opt/bullet/lib/$(LIBLINEARMATH) @executable_path/../Frameworks/$(LIBLINEARMATH) demo
 	cp demo $(APPBUNDLEEXE)/$(APPNAME)
-	cp -r ../data $(APPBUNDLERESOURCES)/data
+	cp -r $(GOPATH)/src/github.com/fcvarela/gosg/cmd/data $(APPBUNDLERESOURCES)/data
+	cp -r ../data $(APPBUNDLERESOURCES)/appdata
 
 demo:
 	go build -v
