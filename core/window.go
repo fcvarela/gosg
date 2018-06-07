@@ -21,6 +21,7 @@ type WindowConfig struct {
 type WindowManager struct {
 	window         *glfw.Window
 	cfg            WindowConfig
+	fbsize         mgl32.Vec2
 	cursorPosition mgl64.Vec2
 }
 
@@ -62,6 +63,9 @@ func (w *WindowManager) MakeWindow() {
 		glog.Fatal(err)
 	}
 
+	fbwidth, fbheight := w.window.GetFramebufferSize()
+	w.fbsize = mgl32.Vec2{float32(fbwidth), float32(fbheight)}
+
 	w.window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 	w.installCallbacks()
 
@@ -70,7 +74,7 @@ func (w *WindowManager) MakeWindow() {
 
 // WindowSize the window size
 func (w *WindowManager) WindowSize() mgl32.Vec2 {
-	return mgl32.Vec2{float32(w.cfg.Width), float32(w.cfg.Height)}
+	return w.fbsize
 }
 
 // ShouldClose whether a stop signal is being processed
