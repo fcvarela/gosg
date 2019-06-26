@@ -163,8 +163,8 @@ void main() {
 
         vec3 color_spec = NdotL_clamped * brdf_spec * (lights[i].color.rgb*(1.0-metalness) + albedo.rgb*metalness);
         vec3 color_diff = NdotL_clamped * diffuse_energy_ratio(f0, N, L) * albedo.rgb * lights[i].color.rgb;
-        float sh = shadow(vec4(position, 1.0), i);
-        color.rgb += (color_diff + color_spec) * sh;
+        float sh = 1.0;//shadow(vec4(position, 1.0), i);
+        color.rgb += (0.05*albedo.rgb + color_diff + color_spec) * sh;
     }
 
     color.a = albedo.a;

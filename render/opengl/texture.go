@@ -180,16 +180,7 @@ func (rs *RenderSystem) NewTexture(d core.TextureDescriptor, data []byte) core.T
 	// set data
 	// this texture's storage has already been allocated, just copy the data
 	if data != nil {
-		gl.TexSubImage2D(
-			target,
-			0,
-			0,
-			0,
-			int32(d.Width),
-			int32(d.Height),
-			format,
-			componentType,
-			gl.Ptr(data))
+		gl.TexSubImage2D(target, 0, 0, 0, int32(d.Width), int32(d.Height), format, componentType, gl.Ptr(data))
 
 		if d.Mipmaps {
 			gl.GenerateMipmap(target)
