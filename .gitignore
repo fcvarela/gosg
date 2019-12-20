@@ -101,3 +101,4 @@ cmd/modelimporter/modelimporter
 CMakeCache.txt
 cmake_install.cmake
 cmd/modelimporter/CMakeFiles
+vendor
