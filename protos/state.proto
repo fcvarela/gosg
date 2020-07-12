@@ -1,5 +1,5 @@
 syntax = "proto3";
-
+option go_package = "github.com/fcvarela/gosg/protos";
 package protos;
 
 message State {
@@ -27,7 +27,7 @@ message State {
     BlendMode blend_src_mode = 6;
     BlendMode blend_dst_mode = 7;
     BlendEquation blend_equation = 8;
-    
+
     enum DepthFunc {
         DEPTH_LESS_EQUAL = 0;
         DEPTH_LESS = 1;
@@ -36,7 +36,7 @@ message State {
     bool depth_test = 9;
     bool depth_write = 10;
     DepthFunc depth_func = 11;
-    
+
     bool color_write = 12;
     bool scissor_test = 13;
 }

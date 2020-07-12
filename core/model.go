@@ -8,7 +8,7 @@ import (
 
 	"github.com/fcvarela/gosg/protos"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 // LoadModel parses model data from a raw resource and returns a node ready

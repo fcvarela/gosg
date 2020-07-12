@@ -13,7 +13,7 @@ import (
 	_ "github.com/fcvarela/gosg/physics/bullet"
 	_ "github.com/fcvarela/gosg/render/opengl"
 	_ "github.com/fcvarela/gosg/resource/filesystem"
-	"github.com/go-gl/glfw/v3.2/glfw"
+	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/golang/glog"
 )
 
