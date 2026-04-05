@@ -14,7 +14,6 @@ type demo1DebugMenuInputComponent struct {
 }
 
 func (u *demo1DebugMenuInputComponent) Run(n *core.Node) []core.NodeCommand {
-	renderLog := core.GetRenderer().RenderLog()
 	timerManager := core.GetTimerManager()
 	imguiSystem := core.GetIMGUISystem()
 
@@ -35,10 +34,6 @@ func (u *demo1DebugMenuInputComponent) Run(n *core.Node) []core.NodeCommand {
 			if u.light != nil {
 				imguiSystem.SliderFloat("Shadow Bias", &u.light.ShadowBias, 0.0, 0.1)
 			}
-		}
-
-		if imguiSystem.CollapsingHeader("RenderLog") {
-			imguiSystem.Text(renderLog)
 		}
 
 		if imguiSystem.CollapsingHeader("Debug Nodes") {

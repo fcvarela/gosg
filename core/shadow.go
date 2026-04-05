@@ -2,7 +2,6 @@ package core
 
 import (
 	"math"
-	"unsafe"
 
 	"github.com/fcvarela/gosg/gpu"
 	"github.com/go-gl/mathgl/mgl32"
@@ -240,6 +239,3 @@ func (s *ShadowMap) Render(light *Light, cam *Camera) {
 		renderer.Flush()
 	}
 }
-
-// InstanceData and rendering helpers use this
-var _ = unsafe.Pointer(nil)

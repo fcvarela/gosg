@@ -116,14 +116,8 @@ fn diffuse_energy_ratio(f0: f32, n: vec3f, l: vec3f) -> f32 {
     return 1.0 - fresnel(f0, n, l);
 }
 
-struct FragmentOutput {
-    @location(0) color: vec4f,
-    @location(1) normal: vec4f,
-};
-
 @fragment
-fn main(in: FragmentInput) -> FragmentOutput {
-    var out: FragmentOutput;
+fn main(in: FragmentInput) -> @location(0) vec4f {
     var color = vec4f(0.0);
 
     // sample material textures
@@ -170,17 +164,12 @@ fn main(in: FragmentInput) -> FragmentOutput {
 
         let color_spec = NdotL_clamped * brdf_spec * (camera.lights[i].color.rgb * (1.0 - metalness) + albedo.rgb * metalness);
         let color_diff = NdotL_clamped * diffuse_energy_ratio(f0, N, L) * albedo.rgb * camera.lights[i].color.rgb;
-        let sh_raw = 1.0;//shadow(vec4f(in.worldPosition, 1.0), i, N, L);
+        let sh_raw = shadow(vec4f(in.worldPosition, 1.0), i, N, L);
         let sh = mix(1.0, sh_raw, clamp(dot(N, L) * 10.0, 0.0, 1.0));
         color = vec4f(color.rgb + (color_diff + color_spec) * sh, color.a);
     }
 
     // Add ambient after direct lighting (not affected by shadow)
     color = vec4f(color.rgb + ambient, albedo.a);
-
-    out.color = color;
-    // View-space normal encoded to [0,1]
-    let viewNormal = normalize((camera.vMatrix * vec4f(N, 0.0)).xyz);
-    out.normal = vec4f(viewNormal * 0.5 + 0.5, 1.0);
-    return out;
+    return color;
 }

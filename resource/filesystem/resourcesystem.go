@@ -4,7 +4,6 @@ package filesystem
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -74,7 +73,7 @@ func New() *ResourceSystem {
 }
 
 func (r *ResourceSystem) resourceWithFullpath(fullpath string) ([]byte, error) {
-	data, e := ioutil.ReadFile(fullpath)
+	data, e := os.ReadFile(fullpath)
 	if e != nil {
 		return nil, fmt.Errorf("could not read file: %v", e)
 	}

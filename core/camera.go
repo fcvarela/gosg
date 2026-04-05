@@ -334,11 +334,6 @@ func (c *Camera) SetRenderTechnique(r CameraRenderFn) {
 	c.renderTechnique = r
 }
 
-// SetConstants overrides the camera's UBO data with explicit matrices and lights.
-func (c *Camera) SetConstants(pMatrix, vMatrix mgl64.Mat4, lights []*Light) {
-	c.constants.SetData(pMatrix, vMatrix, lights)
-}
-
 type innerConstants struct {
 	ViewMatrix           mgl32.Mat4
 	ProjectionMatrix     mgl32.Mat4

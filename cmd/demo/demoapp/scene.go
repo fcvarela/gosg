@@ -50,17 +50,6 @@ func makeGeometrySubscene() (*core.Node, *core.Camera) {
 	}, nil)
 
 	fb.SetColorAttachment(0, colorTexture)
-
-	normalTexture := core.GetRenderer().NewTexture(core.TextureDescriptor{
-		Width:   uint32(core.GetWindowManager().WindowSize().X()),
-		Height:  uint32(core.GetWindowManager().WindowSize().Y()),
-		Mipmaps: false, Target: core.TextureTarget2D,
-		Format: core.TextureFormatRGBA, SizedFormat: core.TextureSizedFormatRGBA16F,
-		ComponentType: core.TextureComponentTypeFLOAT,
-		Filter:        core.TextureFilterNearest, WrapMode: core.TextureWrapModeClampEdge,
-	}, nil)
-	fb.SetColorAttachment(1, normalTexture)
-
 	fb.SetDepthAttachment(depthTexture)
 
 	geometryNode := core.NewNode("GeometryRoot")
@@ -95,75 +84,27 @@ func makeGeometrySubscene() (*core.Node, *core.Camera) {
 	return geometryNode, geometryCamera
 }
 
-func makeSSGISubscene(sourceFB *core.Framebuffer, sourceCamera *core.Camera) (*core.Node, *core.Camera, *core.Framebuffer) {
+func makeFXAASubscene(sourceFB *core.Framebuffer) (*core.Node, *core.Camera) {
 	windowSize := core.GetWindowManager().WindowSize()
 
-	ssgiCamera := core.NewCamera("SSGICamera", core.OrthographicProjection)
-	ssgiCamera.SetAutoReshape(false)
-	ssgiCamera.SetViewport(mgl32.Vec4{0.0, 0.0, windowSize.X(), windowSize.Y()})
-	ssgiCamera.SetClipDistance(mgl64.Vec2{0.0, 1.0})
-	ssgiCamera.SetClearColor(mgl32.Vec4{0.0, 0.0, 0.0, 0.0})
-	ssgiCamera.SetClearMode(core.ClearColor)
-	ssgiCamera.SetRenderOrder(1)
-	// Override constants with geometry camera's perspective projection for depth reconstruction
-	geoCam := sourceCamera
-	ssgiCamera.SetRenderTechnique(func(cam *core.Camera, buckets map[*core.Pipeline][]*core.Node) {
-		cam.SetConstants(geoCam.ProjectionMatrix(), geoCam.ViewMatrix(), nil)
-		core.PostProcessRenderTechnique(cam, buckets)
-	})
-	ssgiCamera.Reshape(core.GetWindowManager().WindowSize())
-
-	// SSGI output framebuffer
-	ssgiFB := core.GetRenderer().NewFramebuffer()
-	ssgiColorTex := core.GetRenderer().NewTexture(core.TextureDescriptor{
-		Width:   uint32(windowSize.X()),
-		Height:  uint32(windowSize.Y()),
-		Mipmaps: false, Target: core.TextureTarget2D,
-		Format: core.TextureFormatRGBA, SizedFormat: core.TextureSizedFormatRGBA16F,
-		ComponentType: core.TextureComponentTypeFLOAT,
-		Filter:        core.TextureFilterLinear, WrapMode: core.TextureWrapModeClampEdge,
-	}, nil)
-	ssgiFB.SetColorAttachment(0, ssgiColorTex)
-	ssgiCamera.SetFramebuffer(ssgiFB)
-
-	ssgiNode := core.NewNode("SSGIQuad")
-	ssgiNode.SetCullComponent(new(core.AlwaysPassCuller))
-	ssgiNode.SetMesh(core.NewScreenQuadMesh(windowSize.X(), windowSize.Y()))
-	ssgiNode.SetPipeline(core.GetResourceManager().Pipeline("ssgi"))
-
-	// Bind geometry pass outputs
-	ssgiNode.Material().SetTexture("colorTex", sourceFB.ColorAttachment(0))
-	ssgiNode.Material().SetTexture("normalTex", sourceFB.ColorAttachment(1))
-	// Depth needs non-comparison sampler for reading raw values
-	depthReadTex := core.GetRenderer().NewDepthReadTexture(sourceFB.DepthAttachment())
-	ssgiNode.Material().SetTexture("depthTex", depthReadTex)
-
-	ssgiCamera.SetScene(ssgiNode)
-	return ssgiNode, ssgiCamera, ssgiFB
-}
-
-func makeFXAASubscene(sourceFB *core.Framebuffer, ssgiFB *core.Framebuffer) (*core.Node, *core.Camera) {
-	windowSize := core.GetWindowManager().WindowSize()
-
-	geometryCamera := core.NewCamera("FXAACamera", core.OrthographicProjection)
-	geometryCamera.SetAutoReshape(false)
-	geometryCamera.SetViewport(mgl32.Vec4{0.0, 0.0, windowSize.X(), windowSize.Y()})
-	geometryCamera.SetClipDistance(mgl64.Vec2{0.0, 1.0})
-	geometryCamera.SetClearColor(mgl32.Vec4{0.1, 0.0, 0.0, 1.0})
-	geometryCamera.SetClearMode(core.ClearColor | core.ClearDepth)
-	geometryCamera.SetRenderOrder(2)
-	geometryCamera.SetRenderTechnique(core.PostProcessRenderTechnique)
-	geometryCamera.Reshape(core.GetWindowManager().WindowSize())
+	fxaaCamera := core.NewCamera("FXAACamera", core.OrthographicProjection)
+	fxaaCamera.SetAutoReshape(false)
+	fxaaCamera.SetViewport(mgl32.Vec4{0.0, 0.0, windowSize.X(), windowSize.Y()})
+	fxaaCamera.SetClipDistance(mgl64.Vec2{0.0, 1.0})
+	fxaaCamera.SetClearColor(mgl32.Vec4{0.1, 0.0, 0.0, 1.0})
+	fxaaCamera.SetClearMode(core.ClearColor | core.ClearDepth)
+	fxaaCamera.SetRenderOrder(1)
+	fxaaCamera.SetRenderTechnique(core.PostProcessRenderTechnique)
+	fxaaCamera.Reshape(core.GetWindowManager().WindowSize())
 
 	screenQuadNode := core.NewNode("ScreenQuad")
 	screenQuadNode.SetCullComponent(new(core.AlwaysPassCuller))
 	screenQuadNode.SetMesh(core.NewScreenQuadMesh(windowSize.X(), windowSize.Y()))
 	screenQuadNode.SetPipeline(core.GetResourceManager().Pipeline("fxaa"))
 	screenQuadNode.Material().SetTexture("colorTexture", sourceFB.ColorAttachment(0))
-	screenQuadNode.Material().SetTexture("ssgiTexture", ssgiFB.ColorAttachment(0))
 
-	geometryCamera.SetScene(screenQuadNode)
-	return screenQuadNode, geometryCamera
+	fxaaCamera.SetScene(screenQuadNode)
+	return screenQuadNode, fxaaCamera
 }
 
 func makeDemoScene() *core.Scene {
@@ -173,16 +114,12 @@ func makeDemoScene() *core.Scene {
 	geoRoot, geoCamera := makeGeometrySubscene()
 	s.AddCamera(geoRoot, geoCamera)
 
-	ssgiRoot, ssgiCamera, ssgiFB := makeSSGISubscene(geoCamera.Framebuffer(), geoCamera)
-	s.AddCamera(ssgiRoot, ssgiCamera)
-
-	hdrRoot, hdrCamera := makeFXAASubscene(geoCamera.Framebuffer(), ssgiFB)
+	hdrRoot, hdrCamera := makeFXAASubscene(geoCamera.Framebuffer())
 	s.AddCamera(hdrRoot, hdrCamera)
 
 	s.SetActive(true)
 
 	s.Root().AddChild(geoRoot)
-	s.Root().AddChild(ssgiRoot)
 	s.Root().AddChild(hdrRoot)
 
 	return s

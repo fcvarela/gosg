@@ -200,8 +200,6 @@ type Renderer struct {
 	pipelines           *pipelineCache
 	defaultTexture      *Texture
 	defaultDepthTexture *Texture
-
-	renderLog string
 }
 
 var renderer *Renderer
@@ -274,11 +272,6 @@ func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) {
 // GetRenderer returns the global renderer.
 func GetRenderer() *Renderer {
 	return renderer
-}
-
-// RenderLog returns the render log.
-func (r *Renderer) RenderLog() string {
-	return r.renderLog
 }
 
 // ProgramExtension returns the file extension for program specs.
@@ -374,27 +367,6 @@ func (r *Renderer) NewUniform() *Uniform {
 // NewUniformBuffer creates a new uniform buffer.
 func (r *Renderer) NewUniformBuffer() *UniformBuffer {
 	return NewUniformBuffer()
-}
-
-// NewDepthReadTexture creates a Texture wrapper around an existing depth texture
-// with a non-comparison sampler, suitable for reading raw depth values in shaders.
-func (r *Renderer) NewDepthReadTexture(depthTex *Texture) *Texture {
-	sampler := r.device.CreateSampler(gpu.SamplerDescriptor{
-		AddressModeU: gpu.AddressModeClampToEdge,
-		AddressModeV: gpu.AddressModeClampToEdge,
-		MinFilter:    gpu.FilterModeNearest,
-		MagFilter:    gpu.FilterModeNearest,
-	})
-	return &Texture{
-		id:      allocateTextureID(),
-		texture: depthTex.texture,
-		view:    depthTex.texture.CreateView(),
-		sampler: sampler,
-		descriptor: TextureDescriptor{
-			Width: depthTex.descriptor.Width, Height: depthTex.descriptor.Height,
-			Format: TextureFormatDEPTH, SizedFormat: TextureSizedFormatDEPTH32F,
-		},
-	}
 }
 
 // CanBatch returns whether two materials can be batched (same textures).
