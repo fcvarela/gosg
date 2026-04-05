@@ -57,7 +57,7 @@ func New() *ResourceSystem {
 
 	paths := make(map[string][]string)
 	paths["programs"] = []string{filepath.Join(bp, "programs"), filepath.Join(ubp, "programs")}
-	paths["states"] = []string{filepath.Join(bp, "states"), filepath.Join(ubp, "states")}
+	paths["pipelines"] = []string{filepath.Join(bp, "pipelines"), filepath.Join(ubp, "pipelines")}
 	paths["models"] = []string{filepath.Join(bp, "models"), filepath.Join(ubp, "models")}
 	paths["textures"] = []string{filepath.Join(bp, "textures"), filepath.Join(ubp, "textures")}
 
@@ -107,7 +107,7 @@ func (r *ResourceSystem) Texture(filename string) []byte {
 // Pipeline implements the core.ResourceSystem interface
 func (r *ResourceSystem) Pipeline(name string) []byte {
 	var filename = name + ".json"
-	return r.loadResource(filename, "states")
+	return r.loadResource(filename, "pipelines")
 }
 
 // Program implements the core.ResourceSystem interface

@@ -21,8 +21,8 @@ func (u *demo1DebugMenuInputComponent) Run(n *core.Node) []core.NodeCommand {
 
 	// Metrics window
 	imguiSystem.SetNextWindowPos(mgl32.Vec2{10.0, 10.0})
-	density := core.GetWindowManager().PixelDensity()
-	imguiSystem.SetNextWindowSize(mgl32.Vec2{320.0 * density, core.GetWindowManager().WindowSize()[1]})
+
+	imguiSystem.SetNextWindowSize(mgl32.Vec2{320.0, 640})
 	if imguiSystem.Begin("Inspector", core.WindowFlagsNoCollapse|core.WindowFlagsNoResize|core.WindowFlagsNoMove) {
 		if imguiSystem.CollapsingHeader("Frame Times") {
 			frameHistogram := timerManager.Histogram()
@@ -34,6 +34,16 @@ func (u *demo1DebugMenuInputComponent) Run(n *core.Node) []core.NodeCommand {
 			if u.light != nil {
 				imguiSystem.SliderFloat("Shadow Bias", &u.light.ShadowBias, 0.0, 0.1)
 			}
+		}
+
+		if imguiSystem.CollapsingHeader("Render Stats") {
+			stats := core.GetRenderer().Stats()
+			imguiSystem.Text(fmt.Sprintf("Render Passes:    %d", stats.RenderPasses))
+			imguiSystem.Text(fmt.Sprintf("Pipeline Switches: %d", stats.PipelineSwitches))
+			imguiSystem.Text(fmt.Sprintf("Draw Calls:       %d", stats.DrawCalls))
+			imguiSystem.Text(fmt.Sprintf("Batches:          %d", stats.Batches))
+			imguiSystem.Text(fmt.Sprintf("Instances Drawn:  %d", stats.InstancesDrawn))
+			imguiSystem.Text(fmt.Sprintf("Flushes:          %d", stats.Flushes))
 		}
 
 		if imguiSystem.CollapsingHeader("Debug Nodes") {

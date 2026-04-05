@@ -34,7 +34,7 @@ func main() {
 		Name:       "Demo",
 		Width:      1024,
 		Height:     768,
-		Fullscreen: false,
+		Fullscreen: true,
 		Vsync:      1,
 	})
 

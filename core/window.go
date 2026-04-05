@@ -92,11 +92,26 @@ func (w *WindowManager) MakeWindow() {
 		glog.Fatalf("SDL_Metal_CreateView failed: %s", C.GoString(C.SDL_GetError()))
 	}
 
-	// Initialize wgpu renderer with actual pixel dimensions
+	// In fullscreen mode, pump events to let macOS finish the fullscreen
+	// transition (notch animation, etc.) before querying the final size.
+	if w.cfg.Fullscreen {
+		C.SDL_SyncWindow(w.window)
+	}
+
+	// Query the actual pixel dimensions after the window is fully set up
 	var pw, ph C.int
 	C.SDL_GetWindowSizeInPixels(w.window, &pw, &ph)
 	w.pixelWidth = int(pw)
 	w.pixelHeight = int(ph)
+
+	// Update point-space dimensions from actual window size
+	var pointW, pointH C.int
+	C.SDL_GetWindowSize(w.window, &pointW, &pointH)
+	if pointW > 0 && pointH > 0 {
+		w.cfg.Width = int(pointW)
+		w.cfg.Height = int(pointH)
+	}
+
 	InitRenderer(w.GetMetalLayer(), uint32(w.pixelWidth), uint32(w.pixelHeight))
 }
 

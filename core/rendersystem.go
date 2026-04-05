@@ -77,6 +77,7 @@ func (rp *RenderPass) SetPipeline(p *Pipeline) bool {
 
 	pipeline := renderer.pipelines.getOrCreate(p, program, rp.colorFormats, rp.depthFormat)
 	rp.encoder.SetPipeline(pipeline)
+	renderer.stats.PipelineSwitches++
 	return true
 }
 
@@ -181,6 +182,16 @@ func (rp *RenderPass) CurrentProgram() *Program {
 	return rp.currentProgram
 }
 
+// FrameStats holds per-frame rendering metrics.
+type FrameStats struct {
+	RenderPasses    int
+	PipelineSwitches int
+	DrawCalls       int
+	Batches         int
+	InstancesDrawn  int
+	Flushes         int
+}
+
 // Renderer holds the wgpu device, queue, and rendering state.
 type Renderer struct {
 	instance      gpu.Instance
@@ -200,6 +211,9 @@ type Renderer struct {
 	pipelines           *pipelineCache
 	defaultTexture      *Texture
 	defaultDepthTexture *Texture
+
+	// Per-frame metrics
+	stats FrameStats
 }
 
 var renderer *Renderer
@@ -272,6 +286,11 @@ func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) {
 // GetRenderer returns the global renderer.
 func GetRenderer() *Renderer {
 	return renderer
+}
+
+// Stats returns the frame stats from the last completed frame.
+func (r *Renderer) Stats() FrameStats {
+	return r.stats
 }
 
 // ProgramExtension returns the file extension for program specs.
@@ -385,10 +404,12 @@ func (r *Renderer) BeginFrame() {
 	r.swapChainTexture = st.Texture
 	r.swapChainView = r.swapChainTexture.CreateView()
 	r.encoder = r.device.CreateCommandEncoder()
+	r.stats = FrameStats{}
 }
 
 // BeginRenderPass creates a new render pass from the descriptor.
 func (r *Renderer) BeginRenderPass(desc RenderPassDescriptor) *RenderPass {
+	r.stats.RenderPasses++
 	gpuDesc := gpu.RenderPassDescriptor{}
 
 	var colorFormats []gpu.TextureFormat
@@ -451,6 +472,7 @@ func (r *Renderer) BeginRenderPass(desc RenderPassDescriptor) *RenderPass {
 // Flush submits the current command encoder and starts a new one.
 // Use between draw sequences that write to the same buffers.
 func (r *Renderer) Flush() {
+	r.stats.Flushes++
 	cmdBuf := r.encoder.Finish()
 	r.queue.Submit(cmdBuf)
 	r.encoder = r.device.CreateCommandEncoder()
@@ -693,4 +715,8 @@ func RenderBatch(pass *RenderPass, camera *Camera, nodes []*Node) {
 	}
 	pass.SetMaterial(&nodes[0].material)
 	nodes[0].mesh.DrawInstanced(pass, len(nodes), unsafe.Pointer(&instanceData))
+
+	renderer.stats.Batches++
+	renderer.stats.DrawCalls++
+	renderer.stats.InstancesDrawn += len(nodes)
 }
