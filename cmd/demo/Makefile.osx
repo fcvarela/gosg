@@ -5,10 +5,10 @@ APPBUNDLEEXE=$(APPBUNDLECONTENTS)/MacOS
 APPBUNDLERESOURCES=$(APPBUNDLECONTENTS)/Resources
 APPBUNDLEFRAMEWORKS=$(APPBUNDLECONTENTS)/Frameworks
 
-LIBBULLETSOFTBODY=libBulletSoftBody.2.87.dylib
-LIBBULLETDYNAMICS=libBulletDynamics.2.87.dylib
-LIBBULLETCOLLISION=libBulletCollision.2.87.dylib
-LIBLINEARMATH=libLinearMath.2.87.dylib
+LIBBULLETSOFTBODY=libBulletSoftBody.3.25.dylib
+LIBBULLETDYNAMICS=libBulletDynamics.3.25.dylib
+LIBBULLETCOLLISION=libBulletCollision.3.25.dylib
+LIBLINEARMATH=libLinearMath.3.25.dylib
 
 $(APPBUNDLE): macosx/$(APPNAME).icns demo
 	rm -rf $(APPBUNDLE)
@@ -20,11 +20,21 @@ $(APPBUNDLE): macosx/$(APPNAME).icns demo
 	cp macosx/Info.plist $(APPBUNDLECONTENTS)/
 	cp macosx/PkgInfo $(APPBUNDLECONTENTS)/
 	cp macosx/$(APPNAME).icns $(APPBUNDLERESOURCES)/
-	install_name_tool -add_rpath "@executable_path/../Frameworks" demo
-	install_name_tool -change /usr/local/opt/bullet/lib/$(LIBBULLETSOFTBODY) @executable_path/../Frameworks/$(LIBBULLETSOFTBODY) demo
-	install_name_tool -change /usr/local/opt/bullet/lib/$(LIBBULLETDYNAMICS) @executable_path/../Frameworks/$(LIBBULLETDYNAMICS) demo
-	install_name_tool -change /usr/local/opt/bullet/lib/$(LIBBULLETCOLLISION) @executable_path/../Frameworks/$(LIBBULLETCOLLISION) demo
-	install_name_tool -change /usr/local/opt/bullet/lib/$(LIBLINEARMATH) @executable_path/../Frameworks/$(LIBLINEARMATH) demo
+
+	install_name_tool -change /opt/homebrew/opt/bullet/lib/$(LIBBULLETSOFTBODY) @executable_path/../Frameworks/$(LIBBULLETSOFTBODY) demo
+	install_name_tool -change /opt/homebrew/opt/bullet/lib/$(LIBBULLETDYNAMICS) @executable_path/../Frameworks/$(LIBBULLETDYNAMICS) demo
+	install_name_tool -change /opt/homebrew/opt/bullet/lib/$(LIBBULLETCOLLISION) @executable_path/../Frameworks/$(LIBBULLETCOLLISION) demo
+	install_name_tool -change /opt/homebrew/opt/bullet/lib/$(LIBLINEARMATH) @executable_path/../Frameworks/$(LIBLINEARMATH) demo
+	install_name_tool -change /opt/homebrew/opt/sdl3/lib/libSDL3.0.dylib @executable_path/../Frameworks/libSDL3.0.dylib demo
+	install_name_tool -change /opt/homebrew/opt/wgpu-native/lib/libwgpu_native.dylib @executable_path/../Frameworks/libwgpu_native.dylib demo
+
+	cp /opt/homebrew/opt/bullet/lib/$(LIBBULLETSOFTBODY) $(APPBUNDLEFRAMEWORKS)
+	cp /opt/homebrew/opt/bullet/lib/$(LIBBULLETDYNAMICS) $(APPBUNDLEFRAMEWORKS)
+	cp /opt/homebrew/opt/bullet/lib/$(LIBBULLETCOLLISION) $(APPBUNDLEFRAMEWORKS)
+	cp /opt/homebrew/opt/bullet/lib/$(LIBLINEARMATH) $(APPBUNDLEFRAMEWORKS)
+	cp /opt/homebrew/opt/sdl3/lib/libSDL3.0.dylib $(APPBUNDLEFRAMEWORKS)
+	cp /opt/homebrew/opt/wgpu-native/lib/libwgpu_native.dylib $(APPBUNDLEFRAMEWORKS)
+
 	cp demo $(APPBUNDLEEXE)/$(APPNAME)
 	cp -r $(GOPATH)/src/github.com/fcvarela/gosg/cmd/data $(APPBUNDLERESOURCES)/data
 	cp -r ../data $(APPBUNDLERESOURCES)/appdata
