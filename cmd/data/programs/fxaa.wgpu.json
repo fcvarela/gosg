@@ -12,11 +12,14 @@
     {
       "entries": [
         {"binding": 0, "visibility": ["fragment"], "texture": {"sampleType": "float", "viewDimension": "2d"}},
-        {"binding": 1, "visibility": ["fragment"], "sampler": {"type": "filtering"}}
+        {"binding": 1, "visibility": ["fragment"], "sampler": {"type": "filtering"}},
+        {"binding": 2, "visibility": ["fragment"], "texture": {"sampleType": "float", "viewDimension": "2d"}},
+        {"binding": 3, "visibility": ["fragment"], "sampler": {"type": "filtering"}}
       ]
     }
   ],
   "textureBindings": {
-    "colorTexture": {"group": 1, "textureBinding": 0, "samplerBinding": 1}
+    "colorTexture": {"group": 1, "textureBinding": 0, "samplerBinding": 1},
+    "ssgiTexture": {"group": 1, "textureBinding": 2, "samplerBinding": 3}
   }
 }

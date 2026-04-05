@@ -9,20 +9,21 @@ import (
 
 // pipelineKey uniquely identifies a render pipeline configuration.
 type pipelineKey struct {
-	programName       string
-	topology          string
-	depthTest         bool
-	depthWrite        bool
-	depthFunc         DepthFunc
-	blending          bool
-	blendSrcMode      BlendMode
-	blendDstMode      BlendMode
-	blendEquation     BlendEquation
-	culling           bool
-	cullFace          CullFace
-	colorWrite        bool
-	colorTargetFormat gpu.TextureFormat
-	depthFormat       gpu.TextureFormat
+	programName        string
+	topology           string
+	depthTest          bool
+	depthWrite         bool
+	depthFunc          DepthFunc
+	blending           bool
+	blendSrcMode       BlendMode
+	blendDstMode       BlendMode
+	blendEquation      BlendEquation
+	culling            bool
+	cullFace           CullFace
+	colorWrite         bool
+	colorTargetFormats [4]gpu.TextureFormat // up to 4 MRT targets
+	numColorTargets    int
+	depthFormat        gpu.TextureFormat
 }
 
 type pipelineCache struct {
@@ -35,22 +36,26 @@ func newPipelineCache() *pipelineCache {
 	}
 }
 
-func (pc *pipelineCache) getOrCreate(p *Pipeline, program *Program, colorFormat, depthFormat gpu.TextureFormat) gpu.RenderPipeline {
+func (pc *pipelineCache) getOrCreate(p *Pipeline, program *Program, colorFormats []gpu.TextureFormat, depthFormat gpu.TextureFormat) gpu.RenderPipeline {
+	var fmtArr [4]gpu.TextureFormat
+	copy(fmtArr[:], colorFormats)
+
 	key := pipelineKey{
-		programName:       p.ProgramName,
-		topology:          p.Topology,
-		depthTest:         p.DepthTest,
-		depthWrite:        p.DepthWrite,
-		depthFunc:         p.DepthFunc,
-		blending:          p.Blending,
-		blendSrcMode:      p.BlendSrcMode,
-		blendDstMode:      p.BlendDstMode,
-		blendEquation:     p.BlendEquation,
-		culling:           p.Culling,
-		cullFace:          p.CullFace,
-		colorWrite:        p.ColorWrite,
-		colorTargetFormat: colorFormat,
-		depthFormat:       depthFormat,
+		programName:        p.ProgramName,
+		topology:           p.Topology,
+		depthTest:          p.DepthTest,
+		depthWrite:         p.DepthWrite,
+		depthFunc:          p.DepthFunc,
+		blending:           p.Blending,
+		blendSrcMode:       p.BlendSrcMode,
+		blendDstMode:       p.BlendDstMode,
+		blendEquation:      p.BlendEquation,
+		culling:            p.Culling,
+		cullFace:           p.CullFace,
+		colorWrite:         p.ColorWrite,
+		colorTargetFormats: fmtArr,
+		numColorTargets:    len(colorFormats),
+		depthFormat:        depthFormat,
 	}
 
 	if p, ok := pc.cache[key]; ok {
@@ -85,8 +90,11 @@ func (pc *pipelineCache) getOrCreate(p *Pipeline, program *Program, colorFormat,
 		desc.CullMode = gpu.CullModeNone
 	}
 
-	// Color target (skip for depth-only passes)
-	if colorFormat != gpu.TextureFormatUndefined {
+	// Color targets (multiple for MRT)
+	for _, colorFormat := range colorFormats {
+		if colorFormat == gpu.TextureFormatUndefined {
+			continue
+		}
 		writeMask := gpu.ColorWriteMaskAll
 		if !p.ColorWrite {
 			writeMask = gpu.ColorWriteMaskNone
@@ -110,7 +118,7 @@ func (pc *pipelineCache) getOrCreate(p *Pipeline, program *Program, colorFormat,
 			}
 		}
 
-		desc.Targets = []gpu.ColorTargetState{target}
+		desc.Targets = append(desc.Targets, target)
 	}
 
 	// Depth stencil

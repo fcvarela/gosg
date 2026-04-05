@@ -59,7 +59,7 @@ type RenderPassDescriptor struct {
 type RenderPass struct {
 	encoder        gpu.RenderPassEncoder
 	currentProgram *Program
-	colorFormat    gpu.TextureFormat
+	colorFormats   []gpu.TextureFormat
 	depthFormat    gpu.TextureFormat
 }
 
@@ -75,7 +75,7 @@ func (rp *RenderPass) SetPipeline(p *Pipeline) bool {
 	}
 	rp.currentProgram = program
 
-	pipeline := renderer.pipelines.getOrCreate(p, program, rp.colorFormat, rp.depthFormat)
+	pipeline := renderer.pipelines.getOrCreate(p, program, rp.colorFormats, rp.depthFormat)
 	rp.encoder.SetPipeline(pipeline)
 	return true
 }
@@ -376,6 +376,27 @@ func (r *Renderer) NewUniformBuffer() *UniformBuffer {
 	return NewUniformBuffer()
 }
 
+// NewDepthReadTexture creates a Texture wrapper around an existing depth texture
+// with a non-comparison sampler, suitable for reading raw depth values in shaders.
+func (r *Renderer) NewDepthReadTexture(depthTex *Texture) *Texture {
+	sampler := r.device.CreateSampler(gpu.SamplerDescriptor{
+		AddressModeU: gpu.AddressModeClampToEdge,
+		AddressModeV: gpu.AddressModeClampToEdge,
+		MinFilter:    gpu.FilterModeNearest,
+		MagFilter:    gpu.FilterModeNearest,
+	})
+	return &Texture{
+		id:      allocateTextureID(),
+		texture: depthTex.texture,
+		view:    depthTex.texture.CreateView(),
+		sampler: sampler,
+		descriptor: TextureDescriptor{
+			Width: depthTex.descriptor.Width, Height: depthTex.descriptor.Height,
+			Format: TextureFormatDEPTH, SizedFormat: TextureSizedFormatDEPTH32F,
+		},
+	}
+}
+
 // CanBatch returns whether two materials can be batched (same textures).
 func (r *Renderer) CanBatch(a *Material, b *Material) bool {
 	return a.sortKey == b.sortKey
@@ -398,19 +419,19 @@ func (r *Renderer) BeginFrame() {
 func (r *Renderer) BeginRenderPass(desc RenderPassDescriptor) *RenderPass {
 	gpuDesc := gpu.RenderPassDescriptor{}
 
-	colorFormat := gpu.TextureFormatUndefined
+	var colorFormats []gpu.TextureFormat
 	depthFormat := gpu.TextureFormatUndefined
 
-	if len(desc.ColorAttachments) > 0 {
-		ca := desc.ColorAttachments[0]
+	for _, ca := range desc.ColorAttachments {
 		colorView := ca.View
 		if colorView == (gpu.TextureView{}) {
 			colorView = r.swapChainView
 		}
-		colorFormat = ca.Format
-		if colorFormat == gpu.TextureFormatUndefined {
-			colorFormat = r.surfaceFormat
+		colorFmt := ca.Format
+		if colorFmt == gpu.TextureFormatUndefined {
+			colorFmt = r.surfaceFormat
 		}
+		colorFormats = append(colorFormats, colorFmt)
 
 		clearColor := gpu.Color{
 			R: float64(ca.ClearColor[0]),
@@ -419,12 +440,12 @@ func (r *Renderer) BeginRenderPass(desc RenderPassDescriptor) *RenderPass {
 			A: float64(ca.ClearColor[3]),
 		}
 
-		gpuDesc.ColorAttachments = []gpu.RenderPassColorAttachment{{
+		gpuDesc.ColorAttachments = append(gpuDesc.ColorAttachments, gpu.RenderPassColorAttachment{
 			View:       colorView,
 			LoadOp:     ca.LoadOp,
 			StoreOp:    gpu.StoreOpStore,
 			ClearValue: clearColor,
-		}}
+		})
 	}
 
 	if desc.DepthAttachment != nil {
@@ -443,9 +464,9 @@ func (r *Renderer) BeginRenderPass(desc RenderPassDescriptor) *RenderPass {
 	enc := r.encoder.BeginRenderPass(gpuDesc)
 
 	rp := &RenderPass{
-		encoder:     enc,
-		colorFormat: colorFormat,
-		depthFormat: depthFormat,
+		encoder:      enc,
+		colorFormats: colorFormats,
+		depthFormat:  depthFormat,
 	}
 
 	if desc.Viewport != (mgl32.Vec4{}) {
@@ -649,6 +670,27 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) 
 func DebugRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) {
 	DefaultRenderTechnique(camera, materialBuckets)
 	AABBRenderTechnique(camera, materialBuckets)
+}
+
+// PostProcessRenderTechnique renders a single pass with no z-prepass.
+// Suitable for fullscreen post-process passes (FXAA, SSGI, etc.).
+func PostProcessRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) {
+	desc := camera.MakeRenderPassDescriptor(
+		camera.clearMode&ClearColor != 0,
+		camera.clearMode&ClearDepth != 0,
+	)
+	pass := renderer.BeginRenderPass(desc)
+	for _, nodes := range materialBuckets {
+		if len(nodes) == 0 {
+			continue
+		}
+		if !pass.SetPipeline(nodes[0].pipeline) {
+			continue
+		}
+		pass.SetCameraConstants(camera.constants.buffer)
+		RenderBatchedNodes(pass, camera, nodes)
+	}
+	pass.End()
 }
 
 // RenderBatchedNodes splits a list of nodes into batched items.

@@ -2,6 +2,8 @@
 
 @group(1) @binding(0) var colorTexture: texture_2d<f32>;
 @group(1) @binding(1) var colorSampler: sampler;
+@group(1) @binding(2) var ssgiTexture: texture_2d<f32>;
+@group(1) @binding(3) var ssgiSampler: sampler;
 
 struct FragmentInput {
     @location(0) tcoords0: vec3f,
@@ -74,6 +76,8 @@ fn fxaa(tcoords: vec2f) -> vec3f {
 @fragment
 fn main(in: FragmentInput) -> @location(0) vec4f {
     var color: vec3f = fxaa(in.tcoords0.xy);
+    let ssgi = textureSample(ssgiTexture, ssgiSampler, in.tcoords0.xy).rgb;
+    color = color + ssgi;
     color = tonemapUncharted2(color);
     color = pow(color, vec3f(1.0 / 2.2));
     return vec4f(color, 1.0);

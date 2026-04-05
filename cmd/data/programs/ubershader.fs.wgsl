@@ -64,8 +64,6 @@ fn pcfShadow(coords: vec2f, layer: i32, compare: f32, bias: f32) -> f32 {
 
 fn shadow(worldPos: vec4f, lightIndex: i32, N: vec3f, L: vec3f) -> f32 {
     let baseBias = camera.lights[lightIndex].color.w;
-    let cosTheta = clamp(dot(N, L), 0.0, 1.0);
-    let bias = max(baseBias * (1.0 - cosTheta), baseBias * 0.1);
 
     let viewPos = camera.vMatrix * worldPos;
     let viewDepth = -viewPos.z;
@@ -75,6 +73,13 @@ fn shadow(worldPos: vec4f, lightIndex: i32, N: vec3f, L: vec3f) -> f32 {
         if (viewDepth < camera.lights[lightIndex].zCuts[c].x) {
             let ccoords = camera.lights[lightIndex].vpMatrix[c] * worldPos;
             let shadowCoords = ccoords.xyz / ccoords.w;
+
+            // Slope-scale bias using screen-space derivatives of shadow depth
+            let dzdx = dpdx(shadowCoords.z);
+            let dzdy = dpdy(shadowCoords.z);
+            let slopeBias = sqrt(dzdx * dzdx + dzdy * dzdy);
+            let bias = baseBias + slopeBias;
+
             return pcfShadow(shadowCoords.xy, c, shadowCoords.z, bias);
         }
     }
@@ -111,8 +116,14 @@ fn diffuse_energy_ratio(f0: f32, n: vec3f, l: vec3f) -> f32 {
     return 1.0 - fresnel(f0, n, l);
 }
 
+struct FragmentOutput {
+    @location(0) color: vec4f,
+    @location(1) normal: vec4f,
+};
+
 @fragment
-fn main(in: FragmentInput) -> @location(0) vec4f {
+fn main(in: FragmentInput) -> FragmentOutput {
+    var out: FragmentOutput;
     var color = vec4f(0.0);
 
     // sample material textures
@@ -132,6 +143,12 @@ fn main(in: FragmentInput) -> @location(0) vec4f {
     // shared products
     let NdotV = dot(N, V);
     let NdotV_clamped = max(NdotV, 0.0000000001);
+
+    // Hemisphere ambient: blend sky and ground color based on world-space normal
+    let skyColor = vec3f(0.4, 0.5, 0.7);
+    let groundColor = vec3f(0.15, 0.1, 0.05);
+    let hemisphereBlend = 0.5 + 0.5 * N.y;
+    let ambient = mix(groundColor, skyColor, hemisphereBlend) * albedo.rgb * (1.0 - metalness * 0.5);
 
     let lc = i32(camera.lightCount[0]);
     for (var i: i32 = 0; i < lc; i++) {
@@ -153,10 +170,17 @@ fn main(in: FragmentInput) -> @location(0) vec4f {
 
         let color_spec = NdotL_clamped * brdf_spec * (camera.lights[i].color.rgb * (1.0 - metalness) + albedo.rgb * metalness);
         let color_diff = NdotL_clamped * diffuse_energy_ratio(f0, N, L) * albedo.rgb * camera.lights[i].color.rgb;
-        let sh = shadow(vec4f(in.worldPosition, 1.0), i, N, L);
-        color = vec4f(color.rgb + (0.05 * albedo.rgb + color_diff + color_spec) * sh, color.a);
+        let sh_raw = 1.0;//shadow(vec4f(in.worldPosition, 1.0), i, N, L);
+        let sh = mix(1.0, sh_raw, clamp(dot(N, L) * 10.0, 0.0, 1.0));
+        color = vec4f(color.rgb + (color_diff + color_spec) * sh, color.a);
     }
 
-    color = vec4f(color.rgb, albedo.a);
-    return color;
+    // Add ambient after direct lighting (not affected by shadow)
+    color = vec4f(color.rgb + ambient, albedo.a);
+
+    out.color = color;
+    // View-space normal encoded to [0,1]
+    let viewNormal = normalize((camera.vMatrix * vec4f(N, 0.0)).xyz);
+    out.normal = vec4f(viewNormal * 0.5 + 0.5, 1.0);
+    return out;
 }

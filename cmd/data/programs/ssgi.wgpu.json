@@ -1,0 +1,28 @@
+{
+  "shaders": {
+    "vertex": "ssgi.vs.wgsl",
+    "fragment": "ssgi.fs.wgsl"
+  },
+  "bindGroupLayouts": [
+    {
+      "entries": [
+        {"binding": 0, "visibility": ["vertex", "fragment"], "buffer": {"type": "uniform"}}
+      ]
+    },
+    {
+      "entries": [
+        {"binding": 0, "visibility": ["fragment"], "texture": {"sampleType": "float", "viewDimension": "2d"}},
+        {"binding": 1, "visibility": ["fragment"], "sampler": {"type": "filtering"}},
+        {"binding": 2, "visibility": ["fragment"], "texture": {"sampleType": "float", "viewDimension": "2d"}},
+        {"binding": 3, "visibility": ["fragment"], "sampler": {"type": "filtering"}},
+        {"binding": 4, "visibility": ["fragment"], "texture": {"sampleType": "unfilterable-float", "viewDimension": "2d"}},
+        {"binding": 5, "visibility": ["fragment"], "sampler": {"type": "non-filtering"}}
+      ]
+    }
+  ],
+  "textureBindings": {
+    "colorTex": {"group": 1, "textureBinding": 0, "samplerBinding": 1},
+    "normalTex": {"group": 1, "textureBinding": 2, "samplerBinding": 3},
+    "depthTex": {"group": 1, "textureBinding": 4, "samplerBinding": 5}
+  }
+}

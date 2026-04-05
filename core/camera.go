@@ -334,6 +334,11 @@ func (c *Camera) SetRenderTechnique(r CameraRenderFn) {
 	c.renderTechnique = r
 }
 
+// SetConstants overrides the camera's UBO data with explicit matrices and lights.
+func (c *Camera) SetConstants(pMatrix, vMatrix mgl64.Mat4, lights []*Light) {
+	c.constants.SetData(pMatrix, vMatrix, lights)
+}
+
 type innerConstants struct {
 	ViewMatrix           mgl32.Mat4
 	ProjectionMatrix     mgl32.Mat4
@@ -390,21 +395,35 @@ func (c *Camera) MakeRenderPassDescriptor(clearColor, clearDepth bool) RenderPas
 		Viewport: c.viewport,
 	}
 
-	// Color attachment
-	if c.framebuffer == nil || len(c.framebuffer.colorAttachments) > 0 {
+	// Color attachments
+	if c.framebuffer == nil {
+		// No framebuffer → single swap chain attachment
 		ca := RenderPassColorAttachment{
 			LoadOp: gpu.LoadOpLoad,
 		}
-		if c.framebuffer != nil && len(c.framebuffer.colorAttachments) > 0 {
-			ca.View = c.framebuffer.colorAttachments[0].view
-			ca.Format = sizedFormatToGPU(c.framebuffer.colorAttachments[0].descriptor.SizedFormat)
-		}
-		// else View/Format are zero → BeginRenderPass will use swap chain
 		if clearColor && c.clearMode&ClearColor != 0 {
 			ca.LoadOp = gpu.LoadOpClear
 			ca.ClearColor = c.clearColor
 		}
 		desc.ColorAttachments = []RenderPassColorAttachment{ca}
+	} else {
+		// Iterate all framebuffer color attachments
+		for i := 0; i < len(c.framebuffer.colorAttachments); i++ {
+			tex := c.framebuffer.colorAttachments[i]
+			if tex == nil {
+				continue
+			}
+			ca := RenderPassColorAttachment{
+				View:   tex.view,
+				Format: sizedFormatToGPU(tex.descriptor.SizedFormat),
+				LoadOp: gpu.LoadOpLoad,
+			}
+			if clearColor && c.clearMode&ClearColor != 0 {
+				ca.LoadOp = gpu.LoadOpClear
+				ca.ClearColor = c.clearColor
+			}
+			desc.ColorAttachments = append(desc.ColorAttachments, ca)
+		}
 	}
 
 	// Depth attachment

@@ -22,12 +22,13 @@ type ShadowMap struct {
 	numCascades  int
 	lambda       float64
 	cameras      []*Camera
-	depthTexture gpu.Texture   // single 2D array texture with N layers
+	depthTexture gpu.Texture     // single 2D array texture with N layers
 	arrayView    gpu.TextureView // view as 2d_array for shader sampling
 	layerViews   []gpu.TextureView // per-layer views for framebuffer attachments
-	texture      *Texture     // wrapper for bind group creation
-	cascadeAABBs [maxCascades]*AABB
-	cascadeZCuts [maxCascades]float64
+	texture      *Texture       // wrapper for bind group creation
+	cascadeCenters [maxCascades]mgl64.Vec3
+	cascadeRadii   [maxCascades]float64
+	cascadeZCuts   [maxCascades]float64
 }
 
 const maxCascades = 10
@@ -111,7 +112,7 @@ func (s *ShadowMap) NumCascades() int {
 	return s.numCascades
 }
 
-// computeCascades computes PSSM cascade split frustums with tight fitting.
+// computeCascades computes PSSM cascade bounding spheres for stable shadow mapping.
 func (s *ShadowMap) computeCascades(camera *Camera) {
 	near := camera.ClipDistance()[0]
 	far := camera.ClipDistance()[1]
@@ -125,16 +126,6 @@ func (s *ShadowMap) computeCascades(camera *Camera) {
 		splits[i] = s.lambda*logSplit + (1-s.lambda)*uniSplit
 	}
 
-	var sceneBounds *AABB
-	if len(camera.VisibleOpaqueNodes()) > 0 {
-		sceneBounds = NewAABB()
-		for _, n := range camera.VisibleOpaqueNodes() {
-			if n.worldBounds != nil {
-				sceneBounds.ExtendWithBox(n.worldBounds)
-			}
-		}
-	}
-
 	aspect := camera.Aspect()
 	fovRad := mgl64.DegToRad(camera.VerticalFOV())
 	viewMatrix := camera.ViewMatrix()
@@ -143,42 +134,73 @@ func (s *ShadowMap) computeCascades(camera *Camera) {
 		proj := PerspectiveWebGPU(fovRad, aspect, splits[cascade], splits[cascade+1])
 		invVP := proj.Mul4(viewMatrix).Inv()
 
-		corners := [8]mgl64.Vec3{
+		// Unproject 8 NDC corners to world space
+		ndcCorners := [8]mgl64.Vec3{
 			{-1, -1, 0}, {+1, -1, 0}, {-1, +1, 0}, {+1, +1, 0},
 			{-1, -1, 1}, {+1, -1, 1}, {-1, +1, 1}, {+1, +1, 1},
 		}
 
-		cascadeAABB := NewAABB()
-		for _, c := range corners {
-			cascadeAABB.ExtendWithPoint(mgl64.TransformCoordinate(c, invVP))
+		var worldCorners [8]mgl64.Vec3
+		for i, c := range ndcCorners {
+			worldCorners[i] = mgl64.TransformCoordinate(c, invVP)
 		}
 
-		if sceneBounds != nil {
-			cascadeAABB = cascadeAABB.Intersection(sceneBounds)
+		// Bounding sphere: center = average of corners
+		center := mgl64.Vec3{}
+		for _, wc := range worldCorners {
+			center = center.Add(wc)
+		}
+		center = center.Mul(1.0 / 8.0)
+
+		// Radius = max distance from center to any corner
+		radius := 0.0
+		for _, wc := range worldCorners {
+			d := wc.Sub(center).Len()
+			if d > radius {
+				radius = d
+			}
 		}
 
-		s.cascadeAABBs[cascade] = cascadeAABB
+		// Round radius up to texel boundary for size stability
+		texelsPerUnit := float64(s.size) / (2.0 * radius)
+		radius = math.Ceil(radius*texelsPerUnit) / texelsPerUnit
+
+		s.cascadeCenters[cascade] = center
+		s.cascadeRadii[cascade] = radius
 		s.cascadeZCuts[cascade] = splits[cascade+1]
 	}
 }
 
 func (s *ShadowMap) renderCascade(cascade int, light *Light, camera *Camera) {
 	shadowCam := s.cameras[cascade]
+	center := s.cascadeCenters[cascade]
+	radius := s.cascadeRadii[cascade]
 
+	// Light view matrix centered on the cascade sphere
 	lightPos64 := mgl64.Vec3{float64(light.Block.Position.X()), float64(light.Block.Position.Y()), float64(light.Block.Position.Z())}
-	shadowCam.viewMatrix = mgl64.LookAtV(lightPos64, mgl64.Vec3{0, 0, 0}, mgl64.Vec3{0, 1, 0})
+	lightDir := lightPos64.Normalize()
+	shadowCam.viewMatrix = mgl64.LookAtV(
+		center.Add(lightDir.Mul(radius)),
+		center,
+		mgl64.Vec3{0, 1, 0},
+	)
 
-	nodesBoundsLight := s.cascadeAABBs[cascade].Transformed(shadowCam.viewMatrix)
+	// Transform sphere center to light space for texel snapping
+	centerLight := mgl64.TransformCoordinate(center, shadowCam.viewMatrix)
 
-	worldUnitsPerTexel := nodesBoundsLight.Max().Sub(nodesBoundsLight.Min()).Mul(1.0 / float64(s.size))
-	projMinX := math.Floor(nodesBoundsLight.Min().X()/worldUnitsPerTexel.X()) * worldUnitsPerTexel.X()
-	projMaxX := math.Floor(nodesBoundsLight.Max().X()/worldUnitsPerTexel.X()) * worldUnitsPerTexel.X()
-	projMinY := math.Floor(nodesBoundsLight.Min().Y()/worldUnitsPerTexel.Y()) * worldUnitsPerTexel.Y()
-	projMaxY := math.Floor(nodesBoundsLight.Max().Y()/worldUnitsPerTexel.Y()) * worldUnitsPerTexel.Y()
+	// Snap center to texel grid (worldUnitsPerTexel is constant for a given cascade)
+	worldUnitsPerTexel := (2.0 * radius) / float64(s.size)
+	centerLight[0] = math.Floor(centerLight[0]/worldUnitsPerTexel) * worldUnitsPerTexel
+	centerLight[1] = math.Floor(centerLight[1]/worldUnitsPerTexel) * worldUnitsPerTexel
 
+	// Ortho projection: X/Y from snapped center ± radius, Z covers the sphere depth.
+	// Camera is at center+lightDir*radius, sphere center at Z=-radius in view space,
+	// so sphere spans Z=[0, -2*radius]. OrthoWebGPU near/far are positive distances.
 	shadowCam.projectionMatrix = OrthoWebGPU(
-		projMinX, projMaxX, projMinY, projMaxY,
-		-nodesBoundsLight.Max().Z(), -nodesBoundsLight.Min().Z())
+		centerLight[0]-radius, centerLight[0]+radius,
+		centerLight[1]-radius, centerLight[1]+radius,
+		0.0, 2.0*radius,
+	)
 
 	vpmatrix := shadowCam.projectionMatrix.Mul4(shadowCam.viewMatrix)
 	biasvpmatrix := mgl64.Mat4FromCols(
