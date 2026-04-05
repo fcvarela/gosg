@@ -1,0 +1,22 @@
+{
+  "shaders": {
+    "vertex": "imgui.vs.wgsl",
+    "fragment": "imgui.fs.wgsl"
+  },
+  "bindGroupLayouts": [
+    {
+      "entries": [
+        {"binding": 0, "visibility": ["vertex", "fragment"], "buffer": {"type": "uniform"}}
+      ]
+    },
+    {
+      "entries": [
+        {"binding": 0, "visibility": ["fragment"], "texture": {"sampleType": "float", "viewDimension": "2d"}},
+        {"binding": 1, "visibility": ["fragment"], "sampler": {"type": "filtering"}}
+      ]
+    }
+  ],
+  "textureBindings": {
+    "colorTex": {"group": 1, "textureBinding": 0, "samplerBinding": 1}
+  }
+}

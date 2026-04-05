@@ -153,6 +153,10 @@ void set_next_window_size(float x, float y) {
     ImGui::SetNextWindowSize(ImVec2(x, y));
 }
 
+int slider_float(const char* label, float* v, float v_min, float v_max) {
+    return ImGui::SliderFloat(label, v, v_min, v_max) ? 1 : 0;
+}
+
 #ifdef __cplusplus
 }
 #endif

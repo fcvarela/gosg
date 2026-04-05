@@ -177,3 +177,26 @@ func (a *AABB) Transformed(m mgl64.Mat4) *AABB {
 	// return the new box
 	return newAABB
 }
+
+// Intersection returns the intersection of two AABBs. If they don't overlap,
+// returns the original AABB unchanged.
+func (a *AABB) Intersection(b *AABB) *AABB {
+	result := &AABB{
+		min: mgl64.Vec3{
+			math.Max(a.min[0], b.min[0]),
+			math.Max(a.min[1], b.min[1]),
+			math.Max(a.min[2], b.min[2]),
+		},
+		max: mgl64.Vec3{
+			math.Min(a.max[0], b.max[0]),
+			math.Min(a.max[1], b.max[1]),
+			math.Min(a.max[2], b.max[2]),
+		},
+	}
+
+	// If intersection is degenerate (no overlap), return the original
+	if result.min[0] > result.max[0] || result.min[1] > result.max[1] || result.min[2] > result.max[2] {
+		return a
+	}
+	return result
+}

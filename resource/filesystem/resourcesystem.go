@@ -113,7 +113,7 @@ func (r *ResourceSystem) State(name string) []byte {
 
 // Program implements the core.ResourceSystem interface
 func (r *ResourceSystem) Program(name string) []byte {
-	var filename = name + "." + core.GetRenderSystem().ProgramExtension()
+	var filename = name + "." + core.GetRenderer().ProgramExtension()
 	return r.loadResource(filename, "programs")
 }
 

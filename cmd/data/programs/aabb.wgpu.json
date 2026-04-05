@@ -1,0 +1,13 @@
+{
+  "shaders": {
+    "vertex": "aabb.vs.wgsl",
+    "fragment": "aabb.fs.wgsl"
+  },
+  "bindGroupLayouts": [
+    {
+      "entries": [
+        {"binding": 0, "visibility": ["vertex", "fragment"], "buffer": {"type": "uniform"}}
+      ]
+    }
+  ]
+}

@@ -3,7 +3,6 @@ package core
 import (
 	"math"
 
-	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl64"
 )
 
@@ -19,7 +18,7 @@ type MousePositionState struct {
 // MouseButtonState holds the mouse button state.
 type MouseButtonState struct {
 	Valid  bool
-	Active map[glfw.MouseButton]bool
+	Active map[MouseButton]bool
 	Action int
 }
 
@@ -41,9 +40,9 @@ type MouseState struct {
 // KeyState holds key input state.
 type KeyState struct {
 	Valid    bool
-	Mods     map[glfw.Key]bool
-	Active   map[glfw.Key]bool
-	Released map[glfw.Key]bool
+	Mods     map[Key]bool
+	Active   map[Key]bool
+	Released map[Key]bool
 }
 
 // InputState wraps mouse and keys input state.
@@ -62,16 +61,13 @@ func (i *InputState) SetKeysValid(valid bool) {
 	i.Keys.Valid = valid
 }
 
-// InputManager wraps global input state. WindowSystem implementations use the manager to expose
-// input state to the system.
+// InputManager wraps global input state.
 type InputManager struct {
 	state InputState
 }
 
-// InputComponent is an interface which returns NodeCommands from nodes. Each node may have its own
-// input component which checks the manager for input and determines what commands should be output.
+// InputComponent is an interface which returns NodeCommands from nodes.
 type InputComponent interface {
-	// Run returns commands from a given node to itself.
 	Run(node *Node) []NodeCommand
 }
 
@@ -81,9 +77,9 @@ var (
 
 func init() {
 	inputManager = &InputManager{}
-	inputManager.state.Keys.Active = make(map[glfw.Key]bool)
-	inputManager.state.Keys.Released = make(map[glfw.Key]bool)
-	inputManager.state.Mouse.Buttons.Active = make(map[glfw.MouseButton]bool)
+	inputManager.state.Keys.Active = make(map[Key]bool)
+	inputManager.state.Keys.Released = make(map[Key]bool)
+	inputManager.state.Mouse.Buttons.Active = make(map[MouseButton]bool)
 }
 
 // GetInputManager returns the manager.
@@ -96,7 +92,7 @@ func (i *InputManager) State() *InputState {
 	return &i.state
 }
 
-// Reset resets all input state and marks substates as invalid.
+// reset resets all input state and marks substates as invalid.
 func (i *InputManager) reset() {
 	for j := range i.state.Keys.Released {
 		i.state.Keys.Released[j] = false
@@ -110,57 +106,49 @@ func (i *InputManager) reset() {
 	i.state.Mouse.Scroll = MouseScrollState{false, 0.0, 0.0}
 }
 
-// KeyCallback is called by windowsystems to register key events.
-func (i *InputManager) KeyCallback(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+// HandleKeyEvent is called by the window system to register key events.
+func (i *InputManager) HandleKeyEvent(key Key, pressed bool) {
 	i.state.Keys.Valid = true
 
-	if action == glfw.Press || action == glfw.Repeat {
+	if pressed {
 		i.state.Keys.Active[key] = true
 		i.state.Keys.Released[key] = false
-	} else if action == glfw.Release {
+	} else {
 		i.state.Keys.Active[key] = false
 		i.state.Keys.Released[key] = true
 	}
 }
 
-// MouseButtonCallback is called by windowsystems to register mouse button events.
-func (i *InputManager) MouseButtonCallback(window *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
+// HandleMouseButton is called by the window system to register mouse button events.
+func (i *InputManager) HandleMouseButton(button MouseButton, pressed bool) {
 	i.state.Mouse.Buttons.Valid = true
-
-	if action == glfw.Press {
-		i.state.Mouse.Buttons.Active[button] = true
-	} else {
-		i.state.Mouse.Buttons.Active[button] = false
-	}
+	i.state.Mouse.Buttons.Active[button] = pressed
 }
 
-// MouseScrollCallback is called by windowsystems to register mouse scroll events.
-func (i *InputManager) MouseScrollCallback(window *glfw.Window, x, y float64) {
+// HandleMouseScroll is called by the window system to register mouse scroll events.
+func (i *InputManager) HandleMouseScroll(x, y float64) {
 	if GetPlatform() == PlatformLinux || GetPlatform() == PlatformWindows {
 		y = -y
 	}
 
 	i.state.Mouse.Valid = true
 	i.state.Mouse.Scroll.Valid = true
-
 	i.state.Mouse.Scroll.X = x
 	i.state.Mouse.Scroll.Y = y
 }
 
-// MouseMoveCallback is called by windowsystems to register mouse move events.
-func (i *InputManager) MouseMoveCallback(window *glfw.Window, x, y float64) {
+// HandleMouseMove is called by the window system to register mouse move events.
+func (i *InputManager) HandleMouseMove(x, y, relX, relY float64) {
 	i.state.Mouse.Valid = true
 	i.state.Mouse.Position.Valid = true
 
-	i.state.Mouse.Position.DistX = x - i.state.Mouse.Position.X
-	i.state.Mouse.Position.DistY = y - i.state.Mouse.Position.Y
-
 	i.state.Mouse.Position.X = x
 	i.state.Mouse.Position.Y = y
+	i.state.Mouse.Position.DistX = relX
+	i.state.Mouse.Position.DistY = relY
 
-	// we also keep track of deltas for cursor position in window
 	windowManager.cursorPosition = mgl64.Vec2{
-		math.Min(math.Max(0.0, windowManager.cursorPosition.X()+i.state.Mouse.Position.DistX), float64(windowManager.cfg.Width)),
-		math.Min(math.Max(0.0, windowManager.cursorPosition.Y()+i.state.Mouse.Position.DistY), float64(windowManager.cfg.Height)),
+		math.Min(math.Max(0.0, windowManager.cursorPosition.X()+relX), float64(windowManager.cfg.Width)),
+		math.Min(math.Max(0.0, windowManager.cursorPosition.Y()+relY), float64(windowManager.cfg.Height)),
 	}
 }

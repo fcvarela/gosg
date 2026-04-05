@@ -3,7 +3,6 @@ package core
 import (
 	"runtime"
 
-	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/golang/glog"
 )
 
@@ -95,9 +94,7 @@ func (app *Application) update(dt float64) {
 	inputManager.reset()
 
 	// poll for events
-	glfw.PollEvents()
-	glfw.PollEvents()
-	glfw.PollEvents()
+	windowManager.PollEvents()
 
 	// update client app
 	acCommands := app.client.InputComponent().Run()
@@ -114,9 +111,12 @@ func (app *Application) update(dt float64) {
 	// run the culler
 	sceneManager.cull()
 
+	// begin GPU frame
+	renderer.BeginFrame()
+
 	// draw
 	sceneManager.draw()
 
-	// swap context buffers and poll for input
-	windowManager.window.SwapBuffers()
+	// end GPU frame (submit + present)
+	renderer.EndFrame()
 }

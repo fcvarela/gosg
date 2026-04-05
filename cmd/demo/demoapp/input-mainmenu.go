@@ -8,20 +8,22 @@ import (
 )
 
 type demo1DebugMenuInputComponent struct {
-	shadowTextures []core.Texture
+	shadowTextures []*core.Texture
 	mainScene      *core.Scene
+	light          *core.Light
 }
 
 func (u *demo1DebugMenuInputComponent) Run(n *core.Node) []core.NodeCommand {
-	renderLog := core.GetRenderSystem().RenderLog()
+	renderLog := core.GetRenderer().RenderLog()
 	timerManager := core.GetTimerManager()
 	imguiSystem := core.GetIMGUISystem()
 
 	imguiSystem.StartFrame(timerManager.Dt())
 
 	// Metrics window
-	imguiSystem.SetNextWindowPos(mgl32.Vec2{0.0, 0.0})
-	imguiSystem.SetNextWindowSize(mgl32.Vec2{320.0, core.GetWindowManager().WindowSize()[1]})
+	imguiSystem.SetNextWindowPos(mgl32.Vec2{10.0, 10.0})
+	density := core.GetWindowManager().PixelDensity()
+	imguiSystem.SetNextWindowSize(mgl32.Vec2{320.0 * density, core.GetWindowManager().WindowSize()[1]})
 	if imguiSystem.Begin("Inspector", core.WindowFlagsNoCollapse|core.WindowFlagsNoResize|core.WindowFlagsNoMove) {
 		if imguiSystem.CollapsingHeader("Frame Times") {
 			frameHistogram := timerManager.Histogram()
@@ -29,10 +31,10 @@ func (u *demo1DebugMenuInputComponent) Run(n *core.Node) []core.NodeCommand {
 			imguiSystem.PlotHistogram(fpsLabel, frameHistogram.Values, 0.0, frameHistogram.Max, mgl32.Vec2{0.0, 60.0})
 		}
 
-		if imguiSystem.CollapsingHeader("ShadowTextures") {
-			imguiSystem.Image(u.shadowTextures[0], mgl32.Vec2{128.0, 128.0})
-			imguiSystem.Image(u.shadowTextures[1], mgl32.Vec2{128.0, 128.0})
-			imguiSystem.Image(u.shadowTextures[2], mgl32.Vec2{128.0, 128.0})
+		if imguiSystem.CollapsingHeader("Shadows") {
+			if u.light != nil {
+				imguiSystem.SliderFloat("Shadow Bias", &u.light.ShadowBias, 0.0, 0.1)
+			}
 		}
 
 		if imguiSystem.CollapsingHeader("RenderLog") {

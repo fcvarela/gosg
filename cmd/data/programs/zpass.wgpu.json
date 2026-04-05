@@ -1,0 +1,13 @@
+{
+  "shaders": {
+    "vertex": "zpass.vs.wgsl",
+    "fragment": "zpass.fs.wgsl"
+  },
+  "bindGroupLayouts": [
+    {
+      "entries": [
+        {"binding": 0, "visibility": ["vertex", "fragment"], "buffer": {"type": "uniform"}}
+      ]
+    }
+  ]
+}

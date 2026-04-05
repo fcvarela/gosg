@@ -43,3 +43,5 @@ void text(const char *t);
 void set_next_window_pos(float x, float y);
 void set_next_window_size(float x, float y);
 
+int slider_float(const char* label, float* v, float v_min, float v_max);
+

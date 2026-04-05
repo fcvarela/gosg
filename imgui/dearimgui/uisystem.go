@@ -9,7 +9,6 @@ import (
 	"unsafe"
 
 	"github.com/fcvarela/gosg/core"
-	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/golang/glog"
 )
@@ -20,7 +19,7 @@ func init() {
 
 // IMGUISystem provides an implementation of the core.IMGUISystem interface by wrapping the C++ library DearIMGUI.
 type IMGUISystem struct {
-	texture core.Texture
+	texture *core.Texture
 }
 
 type textureData struct {
@@ -55,7 +54,7 @@ func (i *IMGUISystem) Start() {
 		Filter:        core.TextureFilterLinear,
 		WrapMode:      core.TextureWrapModeClampEdge,
 	}
-	i.texture = core.GetRenderSystem().NewTexture(textureDescriptor, tdata.payload)
+	i.texture = core.GetRenderer().NewTexture(textureDescriptor, tdata.payload)
 	if i.texture == nil {
 		glog.Fatal("Cannot set nil texture")
 	}
@@ -89,7 +88,7 @@ func (i *IMGUISystem) PlotHistogram(name string, values []float32, minScale, max
 }
 
 // Image implements the core.IMGUISystem interface
-func (i IMGUISystem) Image(texture core.Texture, size mgl32.Vec2) {
+func (i IMGUISystem) Image(texture *core.Texture, size mgl32.Vec2) {
 	if texture == nil {
 		glog.Fatal("Cannot draw nil texture")
 	}
@@ -99,6 +98,11 @@ func (i IMGUISystem) Image(texture core.Texture, size mgl32.Vec2) {
 // Text implements core.IMGUISystem interface
 func (i IMGUISystem) Text(data string) {
 	C.text(C.CString(data))
+}
+
+// SliderFloat implements core.IMGUISystem interface
+func (i IMGUISystem) SliderFloat(label string, v *float32, vMin, vMax float32) bool {
+	return int(C.slider_float(C.CString(label), (*C.float)(unsafe.Pointer(v)), C.float(vMin), C.float(vMax))) == 1
 }
 
 // SetNextWindowPos implements the core.IMGUISystem interface
@@ -114,13 +118,14 @@ func (i *IMGUISystem) SetNextWindowSize(size mgl32.Vec2) {
 // StartFrame implements the core.IMGUISystem interface
 func (i *IMGUISystem) StartFrame(dt float64) {
 	state := core.GetInputManager().State()
-	size := core.GetWindowManager().WindowSize()
+	// ImGui works in point space — natural sizes for fonts, widgets, etc.
+	size := core.GetWindowManager().WindowSizePoints()
 	i.SetDisplaySize(size)
 	i.SetMousePosition(core.GetWindowManager().CursorPosition())
 	i.SetMouseButtons(
-		state.Mouse.Buttons.Active[glfw.MouseButton1],
-		state.Mouse.Buttons.Active[glfw.MouseButton2],
-		state.Mouse.Buttons.Active[glfw.MouseButton3])
+		state.Mouse.Buttons.Active[core.MouseButton1],
+		state.Mouse.Buttons.Active[core.MouseButton2],
+		state.Mouse.Buttons.Active[core.MouseButton3])
 	i.SetMouseScrollPosition(state.Mouse.Scroll.X, state.Mouse.Scroll.Y)
 
 	C.set_dt(C.double(dt))
@@ -171,9 +176,14 @@ func (i *IMGUISystem) SetMouseScrollPosition(xoffset, yoffset float64) {
 func (i *IMGUISystem) EndFrame() {
 	C.render()
 
+	// Only consume input that ImGui actually used
 	state := core.GetInputManager().State()
-	state.SetMouseValid(false)
-	state.SetKeysValid(false)
+	if i.WantsCaptureMouse() {
+		state.SetMouseValid(false)
+	}
+	if i.WantsCaptureKeyboard() {
+		state.SetKeysValid(false)
+	}
 }
 
 // WantsCaptureMouse implements the core.IMGUISystem interface

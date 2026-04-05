@@ -3,7 +3,6 @@ package core
 import (
 	"unsafe"
 
-	"github.com/fcvarela/gosg/protos"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
 )
@@ -100,10 +99,13 @@ type IMGUISystem interface {
 	PlotHistogram(name string, values []float32, minScale, maxScale float32, size mgl32.Vec2)
 
 	// Image draws a texture on a widget with the provided size.
-	Image(texture Texture, size mgl32.Vec2)
+	Image(texture *Texture, size mgl32.Vec2)
 
 	// Text displays a text box
 	Text(data string)
+
+	// SliderFloat displays a float slider and returns true if changed
+	SliderFloat(label string, v *float32, vMin, vMax float32) bool
 }
 
 // IMGUICommand represents an individual draw command for the RenderSystem to present a part of the UI.
@@ -151,15 +153,17 @@ func NewIMGUIScene(name string, inputComponent InputComponent) *Scene {
 	s.Root().SetInputComponent(inputComponent)
 
 	size := windowManager.WindowSize()
+	sizePoints := windowManager.WindowSizePoints()
 	camera := NewCamera("MainMenuCamera", OrthographicProjection)
 	camera.SetRenderTechnique(IMGUIRenderTechnique)
-	camera.SetAutoReshape(true)
+	camera.SetAutoReshape(false)
 	camera.SetClearMode(0)
 	camera.SetViewport(mgl32.Vec4{0, 0, size.X(), size.Y()})
 	camera.SetVerticalFieldOfView(60.0)
 	camera.SetClipDistance(mgl64.Vec2{0.0, 1.0})
 	camera.SetRenderOrder(0)
-	camera.Reshape(mgl32.Vec2{size.X(), size.Y()})
+	// ImGui works in point space; projection maps points to clip space
+	camera.SetProjectionMatrix(OrthoWebGPU(0, float64(sizePoints.X()), float64(sizePoints.Y()), 0, 0, 1))
 
 	// set camera's scene
 	camera.SetScene(s.root)
@@ -171,13 +175,12 @@ func NewIMGUIScene(name string, inputComponent InputComponent) *Scene {
 }
 
 // IMGUIRenderTechnique does z pre-pass, diffuse pass, transparency pass
-func IMGUIRenderTechnique(camera *Camera, materialBuckets map[*protos.State][]*Node) {
-	renderSystem.Dispatch(&SetFramebufferCommand{camera.framebuffer})
-	renderSystem.Dispatch(&SetViewportCommand{camera.viewport})
-	renderSystem.Dispatch(&ClearCommand{camera.clearMode, camera.clearColor, camera.clearDepth})
-	renderSystem.Dispatch(&BindUniformBufferCommand{"cameraConstants", camera.constants.buffer})
-
+func IMGUIRenderTechnique(camera *Camera, materialBuckets map[*State][]*Node) {
+	renderer.Dispatch(&SetFramebufferCommand{camera.framebuffer})
+	renderer.Dispatch(&SetViewportCommand{camera.viewport})
+	renderer.Dispatch(&ClearCommand{camera.clearMode, camera.clearColor, camera.clearDepth})
 	var imguiState = resourceManager.State("imgui")
-	renderSystem.Dispatch(&BindStateCommand{imguiState})
-	renderSystem.Dispatch(&DrawIMGUICommand{})
+	renderer.Dispatch(&BindStateCommand{imguiState})
+	renderer.Dispatch(&BindUniformBufferCommand{"cameraConstants", camera.constants.buffer})
+	renderer.Dispatch(&DrawIMGUICommand{})
 }

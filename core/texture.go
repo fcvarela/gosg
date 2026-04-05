@@ -1,11 +1,60 @@
 package core
 
-import "unsafe"
+import (
+	"unsafe"
 
-// TextureTarget specifies a texture target type (1D, 2D, 2DArray, Cubemap, etc)
+	"github.com/fcvarela/gosg/gpu"
+)
+
+// Texture holds a GPU texture, its view, sampler, and descriptor.
+type Texture struct {
+	texture    gpu.Texture
+	view       gpu.TextureView
+	sampler    gpu.Sampler
+	descriptor TextureDescriptor
+}
+
+// Descriptor returns the descriptor used to create this texture.
+func (t *Texture) Descriptor() TextureDescriptor {
+	return t.descriptor
+}
+
+// Handle returns a pointer to this texture (used by ImGui).
+func (t *Texture) Handle() unsafe.Pointer {
+	return unsafe.Pointer(t)
+}
+
+// Lt is used for sorting textures.
+func (t *Texture) Lt(other *Texture) bool {
+	if other == nil {
+		return false
+	}
+	return uintptr(unsafe.Pointer(t)) < uintptr(unsafe.Pointer(other))
+}
+
+// Gt is used for sorting textures.
+func (t *Texture) Gt(other *Texture) bool {
+	if other == nil {
+		return false
+	}
+	return uintptr(unsafe.Pointer(t)) > uintptr(unsafe.Pointer(other))
+}
+
+// SetFilter recreates the sampler with the given filter mode.
+func (t *Texture) SetFilter(f TextureFilter) {
+	t.descriptor.Filter = f
+	t.sampler = renderer.createSampler(t.descriptor)
+}
+
+// SetWrapMode recreates the sampler with the given wrap mode.
+func (t *Texture) SetWrapMode(wm TextureWrapMode) {
+	t.descriptor.WrapMode = wm
+	t.sampler = renderer.createSampler(t.descriptor)
+}
+
+// TextureTarget specifies a texture target type
 type TextureTarget int
 
-// TextureTargetXXX are the different texture types
 const (
 	TextureTarget1D TextureTarget = iota
 	TextureTarget1DArray
@@ -22,7 +71,6 @@ const (
 // TextureFormat holds the texture component layout
 type TextureFormat int
 
-// These are the several supported texture component layouts
 const (
 	TextureFormatR TextureFormat = iota
 	TextureFormatRG
@@ -31,10 +79,9 @@ const (
 	TextureFormatDEPTH
 )
 
-// TextureSizedFormat specified the format and size of a texture's components
+// TextureSizedFormat specifies the format and size of a texture's components
 type TextureSizedFormat int
 
-// These are the several supportex texture component sizes
 const (
 	TextureSizedFormatR8 TextureSizedFormat = iota
 	TextureSizedFormatR16F
@@ -54,35 +101,30 @@ const (
 // TextureComponentType specifies the texture component storage type
 type TextureComponentType int
 
-// These are the supported texture component storate types
 const (
 	TextureComponentTypeUNSIGNEDBYTE TextureComponentType = iota
 	TextureComponentTypeFLOAT
 )
 
-// TextureWrapMode specifies the type of wrap around a sampler of this texture will use
+// TextureWrapMode specifies the type of wrap around
 type TextureWrapMode int
 
-// These are the supported texture wrap modes
 const (
 	TextureWrapModeClampEdge TextureWrapMode = iota
 	TextureWrapModeClampBorder
 	TextureWrapModeRepeat
 )
 
-// TextureFilter specifies the type of interpolation a sampler of this texture will use
+// TextureFilter specifies the type of interpolation
 type TextureFilter int
 
-// These are the supported texture filtering modes
 const (
 	TextureFilterNearest TextureFilter = iota
 	TextureFilterLinear
 	TextureFilterMipmapLinear
 )
 
-// TextureDescriptor contains the full description of a texture and its sampling parameters
-// It is used as input to texture creation functions and at runtime inside rendersystems
-// to setup samplers and memory allocation
+// TextureDescriptor contains the full description of a texture
 type TextureDescriptor struct {
 	Width         uint32
 	Height        uint32
@@ -93,23 +135,4 @@ type TextureDescriptor struct {
 	ComponentType TextureComponentType
 	Filter        TextureFilter
 	WrapMode      TextureWrapMode
-}
-
-// Texture is an interface which wraps both a texture and settings for samplers sampling it
-type Texture interface {
-	Descriptor() TextureDescriptor
-
-	Handle() unsafe.Pointer
-
-	// Lt is used for sorting
-	Lt(Texture) bool
-
-	// Gt
-	Gt(Texture) bool
-
-	// SetFilter
-	SetFilter(TextureFilter)
-
-	// SetWrapMode
-	SetWrapMode(TextureWrapMode)
 }

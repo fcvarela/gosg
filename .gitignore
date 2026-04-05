@@ -74,8 +74,6 @@ _testmain.go
 *.dylib
 *.dll
 
-# Fortran module files
-*.mod
 
 # Compiled Static libraries
 *.lai

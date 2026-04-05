@@ -1,7 +1,7 @@
 {
     "programName": "shadow",
     "culling": true,
-    "cullFace": "CULL_BACK",
+    "cullFace": "CULL_FRONT",
     "blending": false,
     "blendSrcMode": "BLEND_SRC_ALPHA",
     "blendDstMode": "BLEND_ONE_MINUS_SRC_ALPHA",
@@ -9,6 +9,6 @@
     "depthTest": true,
     "depthWrite": true,
     "depthFunc": "DEPTH_LESS_EQUAL",
-    "colorWrite": true,
+    "colorWrite": false,
     "scissorTest": false
 }

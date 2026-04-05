@@ -1,20 +1,40 @@
 package core
 
-// Framebuffer is an interface which wraps a render target. This contains
-// information about depth and color attachments, dimensions.
-type Framebuffer interface {
-	// SetColorAttachment sets the color attachment at the specified index.
-	SetColorAttachment(index int, attachment Texture)
+// Framebuffer holds render target attachments.
+type Framebuffer struct {
+	colorAttachments map[int]*Texture
+	depthAttachment  *Texture
+	// GPU handle will be added in Phase 2
+}
 
-	// ColorAttachments returns the framebuffer color attachments.
-	ColorAttachments() map[int]Texture
+// NewFramebuffer creates a new framebuffer.
+func NewFramebuffer() *Framebuffer {
+	return &Framebuffer{
+		colorAttachments: make(map[int]*Texture),
+	}
+}
 
-	// ColorAttachment returns the color attachment at the specified index.
-	ColorAttachment(index int) Texture
+// SetColorAttachment sets the color attachment at the specified index.
+func (f *Framebuffer) SetColorAttachment(index int, attachment *Texture) {
+	f.colorAttachments[index] = attachment
+}
 
-	// SetDepthAttachment sets the depth attachment.
-	SetDepthAttachment(attachment Texture)
+// ColorAttachments returns the framebuffer color attachments.
+func (f *Framebuffer) ColorAttachments() map[int]*Texture {
+	return f.colorAttachments
+}
 
-	// DepthAttachment returns the framebuffer depth attachment
-	DepthAttachment() Texture
+// ColorAttachment returns the color attachment at the specified index.
+func (f *Framebuffer) ColorAttachment(index int) *Texture {
+	return f.colorAttachments[index]
+}
+
+// SetDepthAttachment sets the depth attachment.
+func (f *Framebuffer) SetDepthAttachment(attachment *Texture) {
+	f.depthAttachment = attachment
+}
+
+// DepthAttachment returns the framebuffer depth attachment.
+func (f *Framebuffer) DepthAttachment() *Texture {
+	return f.depthAttachment
 }

@@ -98,7 +98,7 @@ func SetPhysicsSystem(ps PhysicsSystem) {
 	physicsSystem = ps
 }
 
-// GetPhysicsSystem returns the renderSystem, thereby exposing it to any package importing core.
+// GetPhysicsSystem returns the physics system.
 func GetPhysicsSystem() PhysicsSystem {
 	return physicsSystem
 }

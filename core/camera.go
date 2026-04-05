@@ -1,11 +1,9 @@
 package core
 
 import (
-	"math"
 	"runtime"
 	"unsafe"
 
-	"github.com/fcvarela/gosg/protos"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/golang/glog"
@@ -36,7 +34,7 @@ const (
 
 // CameraRenderFn implements a specific drawing method for a slice of nodes
 // viewed by a camera.
-type CameraRenderFn func(*Camera, map[*protos.State][]*Node)
+type CameraRenderFn func(*Camera, map[*State][]*Node)
 
 // A Camera represents a scenegraph camera object. It wraps data which holds
 // its transforms (projection and view matrices), clear information, whether
@@ -60,13 +58,11 @@ type Camera struct {
 	clipDistance       mgl64.Vec2
 	dirty              bool
 	renderOrder        uint8
-	framebuffer        Framebuffer
+	framebuffer        *Framebuffer
 	frustum            [6]mgl64.Vec4
-	cascadingAABBS     [maxCascades]*AABB
-	cascadingZCuts     [maxCascades]float64
 	constants          cameraUBO
 	renderTechnique    CameraRenderFn
-	stateBuckets       map[*protos.State][]*Node
+	stateBuckets       map[*State][]*Node
 	visibleOpaqueNodes []*Node
 }
 
@@ -107,9 +103,9 @@ func NewCamera(name string, projType ProjectionType) *Camera {
 	cam.SetProjectionType(projType)
 	cam.node = NewNode(name)
 	cam.node.bounds = nil
-	cam.constants.buffer = renderSystem.NewUniformBuffer()
+	cam.constants.buffer = NewUniformBuffer()
 	cam.renderTechnique = DefaultRenderTechnique
-	cam.stateBuckets = make(map[*protos.State][]*Node)
+	cam.stateBuckets = make(map[*State][]*Node)
 	cam.visibleOpaqueNodes = make([]*Node, 0)
 
 	runtime.SetFinalizer(&cam, deleteCamera)
@@ -206,45 +202,39 @@ func (c *Camera) Reshape(windowSize mgl32.Vec2) {
 
 	if c.dirty {
 		if c.projectionType == PerspectiveProjection {
-			c.projectionMatrix = mgl64.Perspective(mgl64.DegToRad(c.vertFOV), float64(c.viewport[2]/c.viewport[3]), c.clipDistance[0], c.clipDistance[1])
+			c.projectionMatrix = PerspectiveWebGPU(mgl64.DegToRad(c.vertFOV), float64(c.viewport[2]/c.viewport[3]), c.clipDistance[0], c.clipDistance[1])
 		}
 		if c.projectionType == OrthographicProjection {
-			c.projectionMatrix = mgl64.Ortho(float64(c.viewport[0]), float64(c.viewport[2]), float64(c.viewport[3]), float64(c.viewport[1]), c.clipDistance[0], c.clipDistance[1])
+			c.projectionMatrix = OrthoWebGPU(float64(c.viewport[0]), float64(c.viewport[2]), float64(c.viewport[3]), float64(c.viewport[1]), c.clipDistance[0], c.clipDistance[1])
 		}
 		c.dirty = false
-	}
-
-	var worldVisibleRange = c.clipDistance[1] - c.clipDistance[0]
-	var minRange = c.clipDistance[0]
-	var maxRange float64
-	for cascade := 0; cascade < numCascades; cascade++ {
-		maxRange = worldVisibleRange / (math.Pow(2, 2*float64(numCascades-cascade-1)))
-		var projectionMatrix = mgl64.Perspective(mgl64.DegToRad(c.vertFOV), float64(c.viewport[2]/c.viewport[3]), minRange, maxRange)
-		var frustumCorners = [8]mgl64.Vec3{
-			{-1, -1, -1},
-			{+1, -1, -1},
-			{-1, +1, -1},
-			{+1, +1, -1},
-			{-1, -1, +1},
-			{+1, -1, +1},
-			{-1, +1, +1},
-			{+1, +1, +1},
-		}
-
-		c.cascadingAABBS[cascade] = NewAABB()
-		var invProjectionMatrix = projectionMatrix.Mul4(c.viewMatrix).Inv()
-
-		for p := range frustumCorners {
-			c.cascadingAABBS[cascade].ExtendWithPoint(mgl64.TransformCoordinate(frustumCorners[p], invProjectionMatrix))
-		}
-		c.cascadingZCuts[cascade] = maxRange
-		minRange = maxRange
 	}
 
 	c.frustum = MakeFrustum(c.projectionMatrix, c.viewMatrix)
 }
 
-// MakeFrustum creates a frustum's 6 planes from a projection and view matrix
+// VerticalFOV returns the camera's vertical field of view in radians.
+func (c *Camera) VerticalFOV() float64 {
+	return c.vertFOV
+}
+
+// ClipDistance returns the camera's near/far clip distances.
+func (c *Camera) ClipDistance() mgl64.Vec2 {
+	return c.clipDistance
+}
+
+// VisibleOpaqueNodes returns the visible opaque nodes from the last cull pass.
+func (c *Camera) VisibleOpaqueNodes() []*Node {
+	return c.visibleOpaqueNodes
+}
+
+// Aspect returns the camera's viewport aspect ratio.
+func (c *Camera) Aspect() float64 {
+	return float64(c.viewport[2] / c.viewport[3])
+}
+
+// MakeFrustum creates a frustum's 6 planes from a projection and view matrix.
+// Uses WebGPU NDC convention (Z in [0,1]).
 func MakeFrustum(p, v mgl64.Mat4) (f [6]mgl64.Vec4) {
 	viewProj := p.Mul4(v)
 	rowX := viewProj.Row(0)
@@ -252,14 +242,13 @@ func MakeFrustum(p, v mgl64.Mat4) (f [6]mgl64.Vec4) {
 	rowZ := viewProj.Row(2)
 	rowW := viewProj.Row(3)
 
-	f[0] = rowW.Add(rowX)
-	f[1] = rowW.Sub(rowX)
-	f[2] = rowW.Add(rowY)
-	f[3] = rowW.Sub(rowY)
-	f[4] = rowW.Add(rowZ)
-	f[5] = rowW.Sub(rowZ)
+	f[0] = rowW.Add(rowX)  // left
+	f[1] = rowW.Sub(rowX)  // right
+	f[2] = rowW.Add(rowY)  // bottom
+	f[3] = rowW.Sub(rowY)  // top
+	f[4] = rowZ            // near (z >= 0 in WebGPU NDC)
+	f[5] = rowW.Sub(rowZ)  // far  (z <= 1 in WebGPU NDC)
 
-	// normalize planes
 	for i := range f {
 		len := f[i].Vec3().Len()
 		f[i] = f[i].Mul(1.0 / len)
@@ -271,6 +260,7 @@ func MakeFrustum(p, v mgl64.Mat4) (f [6]mgl64.Vec4) {
 // SetProjectionMatrix sets the camera's projection matrix.
 func (c *Camera) SetProjectionMatrix(m mgl64.Mat4) {
 	c.projectionMatrix = m
+	c.dirty = false
 }
 
 // SetViewMatrix sets the camera's view matrix.
@@ -319,12 +309,12 @@ func (c *Camera) SetClearMode(cm ClearMode) {
 }
 
 // Framebuffer returns the camera's render target.
-func (c *Camera) Framebuffer() Framebuffer {
+func (c *Camera) Framebuffer() *Framebuffer {
 	return c.framebuffer
 }
 
 // SetFramebuffer sets the camera's render target.
-func (c *Camera) SetFramebuffer(rt Framebuffer) {
+func (c *Camera) SetFramebuffer(rt *Framebuffer) {
 	c.framebuffer = rt
 }
 
@@ -348,6 +338,7 @@ type innerConstants struct {
 	ProjectionMatrix     mgl32.Mat4
 	ViewProjectionMatrix mgl32.Mat4
 	LightCount           mgl32.Vec4
+	CameraWorldPosition  mgl32.Vec4
 	LightBlocks          [16]LightBlock
 }
 
@@ -355,13 +346,8 @@ type innerConstants struct {
 // and a list of active lights.
 type cameraUBO struct {
 	inner  innerConstants
-	buffer UniformBuffer
+	buffer *UniformBuffer
 }
-
-var (
-	lightBlockLen = (maxCascades*16 + maxCascades*4 + 4 + 4) // 16 lights * 16 floats per light + 4 floats lightcount, all mult4 (sizeof float)
-	sceneBlockLen = (3*16 + 16*lightBlockLen + 4) * 4
-)
 
 // SetData sets matrices and light information for the entire scene
 func (sb *cameraUBO) SetData(pMatrix, vMatrix mgl64.Mat4, l []*Light) {
@@ -369,6 +355,12 @@ func (sb *cameraUBO) SetData(pMatrix, vMatrix mgl64.Mat4, l []*Light) {
 	sb.inner.ViewMatrix = Mat4DoubleToFloat(vMatrix)
 	sb.inner.ProjectionMatrix = Mat4DoubleToFloat(pMatrix)
 	sb.inner.ViewProjectionMatrix = Mat4DoubleToFloat(pMatrix.Mul4(vMatrix))
+
+	// camera world position from inverse view matrix
+	invView := vMatrix.Inv()
+	sb.inner.CameraWorldPosition = mgl32.Vec4{
+		float32(invView[12]), float32(invView[13]), float32(invView[14]), 1.0,
+	}
 
 	// lights
 	sb.inner.LightCount = mgl32.Vec4{0.0, 0.0, 0.0, 0.0}
@@ -381,10 +373,10 @@ func (sb *cameraUBO) SetData(pMatrix, vMatrix mgl64.Mat4, l []*Light) {
 	inner := sb.inner
 
 	// set the constant buffer pointer and length
-	sb.buffer.Set(unsafe.Pointer(&inner), sceneBlockLen)
+	sb.buffer.Set(unsafe.Pointer(&inner), int(unsafe.Sizeof(inner)))
 }
 
 // UniformBuffer returns the camera constants uniform buffer
-func (sb *cameraUBO) UniformBuffer() UniformBuffer {
+func (sb *cameraUBO) UniformBuffer() *UniformBuffer {
 	return sb.buffer
 }

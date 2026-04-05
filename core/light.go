@@ -13,8 +13,9 @@ type LightBlock struct {
 
 // Light represents a light. It contains a properties block and an optional shadower.
 type Light struct {
-	Block    LightBlock
-	Shadower Shadower
+	Block      LightBlock
+	Shadower   Shadower
+	ShadowBias float32 // tunable shadow bias, passed via Color.w
 }
 
 // LightExtractor is an interface which extracts a light from a node and adds it to a bucket.
@@ -37,6 +38,8 @@ func (lc *DefaultLightExtractor) Run(node *Node, lightBucket *[]*Light) {
 		// set xyz from node transform
 		lPos := node.WorldPosition().Vec4(float64(node.light.Block.Position.W()))
 		node.light.Block.Position = Vec4DoubleToFloat(lPos)
+		// pass shadow bias through color.w
+		node.light.Block.Color[3] = node.light.ShadowBias
 		*lightBucket = append(*lightBucket, node.light)
 	}
 

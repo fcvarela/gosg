@@ -3,7 +3,6 @@ package core
 import (
 	"runtime"
 
-	"github.com/fcvarela/gosg/protos"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/golang/glog"
 )
@@ -43,11 +42,11 @@ type Node struct {
 	worldBounds           *AABB
 
 	// state management
-	state        *protos.State
+	state        *State
 	materialData Descriptors
 
 	// geometry, lighting & physics
-	mesh      Mesh
+	mesh      *Mesh
 	light     *Light
 	rigidBody RigidBody
 
@@ -238,7 +237,7 @@ func (n *Node) SetBoundsCallback(f BoundsCallbackFn) {
 }
 
 // Mesh returns the node's mesh.
-func (n *Node) Mesh() Mesh {
+func (n *Node) Mesh() *Mesh {
 	return n.mesh
 }
 
@@ -253,7 +252,7 @@ func (n *Node) Children() []*Node {
 }
 
 // SetMesh sets the node's mesh.
-func (n *Node) SetMesh(m Mesh) {
+func (n *Node) SetMesh(m *Mesh) {
 	n.mesh = m
 	n.setDirtyBounds()
 }
@@ -292,12 +291,12 @@ func (n *Node) setDirtyTransform() {
 }
 
 // SetState sets the node's pipeline state
-func (n *Node) SetState(s *protos.State) {
+func (n *Node) SetState(s *State) {
 	n.state = s
 }
 
 // State returns the node's state
-func (n *Node) State() *protos.State {
+func (n *Node) State() *State {
 	return n.state
 }
 
@@ -464,7 +463,7 @@ func (n *Node) Translate(vec mgl64.Vec3) {
 func (n *Node) Scale(s mgl64.Vec3) {
 	n.transform = n.transform.Mul4(mgl64.Scale3D(s[0], s[1], s[2]))
 	n.setDirtyTransform()
-	n.updateBounds()
+	n.setDirtyBounds()
 }
 
 // AddChild adds a child to the node
@@ -478,9 +477,10 @@ func (n *Node) AddChild(c *Node) {
 func (n *Node) RemoveChild(c *Node) {
 	for i := range n.children {
 		if n.children[i] == c {
-			c.parent.setDirtyBounds()
+			n.setDirtyBounds()
 			n.children = append(n.children[:i], n.children[i+1:]...)
 			c.parent = nil
+			break
 		}
 	}
 }
@@ -501,18 +501,24 @@ func (n *Node) RemoveChildren() {
 // Copy deep copies a node.
 func (n *Node) Copy() *Node {
 	nc := *n
+	nc.parent = nil
 	nc.children = make([]*Node, 0)
+	nc.bounds = NewAABB()
+	nc.worldBounds = NewAABB()
+	nc.dirtyTransform = true
+	nc.dirtyBounds = true
+
+	// deep copy material data
+	nc.materialData = NewDescriptors()
+	for k, v := range n.materialData.uniforms {
+		nc.materialData.uniforms[k] = v.Copy()
+	}
+	for k, v := range n.materialData.textures {
+		nc.materialData.SetTexture(k, v)
+	}
 
 	for _, c := range n.children {
-		cc := *c
-		cc.materialData.uniforms = make(map[string]Uniform)
-		for k, v := range c.materialData.uniforms {
-			cc.materialData.Uniform(k).Set(v.Value())
-		}
-		for k, v := range c.materialData.textures {
-			cc.materialData.SetTexture(k, v)
-		}
-		nc.AddChild(&cc)
+		nc.AddChild(c.Copy())
 	}
 
 	return &nc

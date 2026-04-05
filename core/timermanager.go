@@ -1,10 +1,6 @@
 package core
 
-import (
-	"math"
-
-	"github.com/go-gl/glfw/v3.3/glfw"
-)
+import "math"
 
 // TimerHistogram is a generic histogram of values with a min/max range.
 type TimerHistogram struct {
@@ -62,7 +58,7 @@ func (ts *TimerManager) Paused() bool {
 
 // Time returns the system time in number of seconds since application startup.
 func (ts *TimerManager) Time() float64 {
-	return glfw.GetTime()
+	return sdlGetTimeSeconds()
 }
 
 // FrameStartTime returns the time at which the current frame started in number of seconds since application startup.
