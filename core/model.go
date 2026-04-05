@@ -181,7 +181,7 @@ func LoadModel(name string, res []byte) *Node {
 	parentNode := NewNode(basename)
 	for i := range m.Meshes {
 		node := NewNode(basename + fmt.Sprintf("-%d", i))
-		node.state = resourceManager.State(m.Meshes[i].State)
+		node.pipeline = resourceManager.Pipeline(m.Meshes[i].State)
 
 		textureDescriptor := TextureDescriptor{
 			Mipmaps:  true,
@@ -190,16 +190,16 @@ func LoadModel(name string, res []byte) *Node {
 		}
 
 		if len(m.Meshes[i].AlbedoMap) > 0 {
-			node.MaterialData().SetTexture("albedoTex", renderer.NewTextureFromImageData(m.Meshes[i].AlbedoMap, textureDescriptor))
+			node.Material().SetTexture("albedoTex", renderer.NewTextureFromImageData(m.Meshes[i].AlbedoMap, textureDescriptor))
 		}
 		if len(m.Meshes[i].NormalMap) > 0 {
-			node.MaterialData().SetTexture("normalTex", renderer.NewTextureFromImageData(m.Meshes[i].NormalMap, textureDescriptor))
+			node.Material().SetTexture("normalTex", renderer.NewTextureFromImageData(m.Meshes[i].NormalMap, textureDescriptor))
 		}
 		if len(m.Meshes[i].RoughMap) > 0 {
-			node.MaterialData().SetTexture("roughTex", renderer.NewTextureFromImageData(m.Meshes[i].RoughMap, textureDescriptor))
+			node.Material().SetTexture("roughTex", renderer.NewTextureFromImageData(m.Meshes[i].RoughMap, textureDescriptor))
 		}
 		if len(m.Meshes[i].MetalMap) > 0 {
-			node.MaterialData().SetTexture("metalTex", renderer.NewTextureFromImageData(m.Meshes[i].MetalMap, textureDescriptor))
+			node.Material().SetTexture("metalTex", renderer.NewTextureFromImageData(m.Meshes[i].MetalMap, textureDescriptor))
 		}
 
 		mesh := renderer.NewMesh()

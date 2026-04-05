@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"unsafe"
 
+	"github.com/fcvarela/gosg/gpu"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/golang/glog"
@@ -34,7 +35,7 @@ const (
 
 // CameraRenderFn implements a specific drawing method for a slice of nodes
 // viewed by a camera.
-type CameraRenderFn func(*Camera, map[*State][]*Node)
+type CameraRenderFn func(*Camera, map[*Pipeline][]*Node)
 
 // A Camera represents a scenegraph camera object. It wraps data which holds
 // its transforms (projection and view matrices), clear information, whether
@@ -62,7 +63,7 @@ type Camera struct {
 	frustum            [6]mgl64.Vec4
 	constants          cameraUBO
 	renderTechnique    CameraRenderFn
-	stateBuckets       map[*State][]*Node
+	pipelineBuckets    map[*Pipeline][]*Node
 	visibleOpaqueNodes []*Node
 }
 
@@ -105,7 +106,7 @@ func NewCamera(name string, projType ProjectionType) *Camera {
 	cam.node.bounds = nil
 	cam.constants.buffer = NewUniformBuffer()
 	cam.renderTechnique = DefaultRenderTechnique
-	cam.stateBuckets = make(map[*State][]*Node)
+	cam.pipelineBuckets = make(map[*Pipeline][]*Node)
 	cam.visibleOpaqueNodes = make([]*Node, 0)
 
 	runtime.SetFinalizer(&cam, deleteCamera)
@@ -184,8 +185,8 @@ func (c *Camera) ClearMode() ClearMode {
 // AddNodeToRenderBuckets adds a node to the camera's renderbuckets for the next render
 // loop
 func (c *Camera) AddNodeToRenderBuckets(n *Node) {
-	c.stateBuckets[n.state] = append(c.stateBuckets[n.state], n)
-	if !n.state.Blending {
+	c.pipelineBuckets[n.pipeline] = append(c.pipelineBuckets[n.pipeline], n)
+	if !n.pipeline.Blending {
 		c.visibleOpaqueNodes = append(c.visibleOpaqueNodes, n)
 	}
 }
@@ -379,4 +380,46 @@ func (sb *cameraUBO) SetData(pMatrix, vMatrix mgl64.Mat4, l []*Light) {
 // UniformBuffer returns the camera constants uniform buffer
 func (sb *cameraUBO) UniformBuffer() *UniformBuffer {
 	return sb.buffer
+}
+
+// MakeRenderPassDescriptor creates a RenderPassDescriptor from the camera's framebuffer,
+// viewport, and clear settings. If clearColor/clearDepth are true, the corresponding
+// attachments use LoadOpClear; otherwise LoadOpLoad.
+func (c *Camera) MakeRenderPassDescriptor(clearColor, clearDepth bool) RenderPassDescriptor {
+	desc := RenderPassDescriptor{
+		Viewport: c.viewport,
+	}
+
+	// Color attachment
+	if c.framebuffer == nil || len(c.framebuffer.colorAttachments) > 0 {
+		ca := RenderPassColorAttachment{
+			LoadOp: gpu.LoadOpLoad,
+		}
+		if c.framebuffer != nil && len(c.framebuffer.colorAttachments) > 0 {
+			ca.View = c.framebuffer.colorAttachments[0].view
+			ca.Format = sizedFormatToGPU(c.framebuffer.colorAttachments[0].descriptor.SizedFormat)
+		}
+		// else View/Format are zero → BeginRenderPass will use swap chain
+		if clearColor && c.clearMode&ClearColor != 0 {
+			ca.LoadOp = gpu.LoadOpClear
+			ca.ClearColor = c.clearColor
+		}
+		desc.ColorAttachments = []RenderPassColorAttachment{ca}
+	}
+
+	// Depth attachment
+	if c.framebuffer != nil && c.framebuffer.depthAttachment != nil {
+		da := RenderPassDepthAttachment{
+			View:       c.framebuffer.depthAttachment.view,
+			Format:     sizedFormatToGPU(c.framebuffer.depthAttachment.descriptor.SizedFormat),
+			LoadOp:     gpu.LoadOpLoad,
+			ClearDepth: float32(c.clearDepth),
+		}
+		if clearDepth && c.clearMode&ClearDepth != 0 {
+			da.LoadOp = gpu.LoadOpClear
+		}
+		desc.DepthAttachment = &da
+	}
+
+	return desc
 }

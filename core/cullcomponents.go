@@ -25,8 +25,8 @@ func (cc *DefaultCuller) Run(scene *Scene, camera *Camera, node *Node) {
 
 	// the default implementation is to add ourselves to the bucket
 	if node.mesh != nil {
-		camera.stateBuckets[node.state] = append(camera.stateBuckets[node.state], node)
-		if !node.state.Blending {
+		camera.pipelineBuckets[node.pipeline] = append(camera.pipelineBuckets[node.pipeline], node)
+		if !node.pipeline.Blending {
 			camera.visibleOpaqueNodes = append(camera.visibleOpaqueNodes, node)
 		}
 	}
@@ -43,7 +43,7 @@ type AlwaysPassCuller struct{}
 func (apcc *AlwaysPassCuller) Run(scene *Scene, camera *Camera, node *Node) {
 	// the default implementation is to add ourselves to the bucket
 	if node.mesh != nil {
-		camera.stateBuckets[node.state] = append(camera.stateBuckets[node.state], node)
+		camera.pipelineBuckets[node.pipeline] = append(camera.pipelineBuckets[node.pipeline], node)
 	}
 
 	for _, ch := range node.children {

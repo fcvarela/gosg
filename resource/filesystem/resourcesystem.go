@@ -105,8 +105,8 @@ func (r *ResourceSystem) Texture(filename string) []byte {
 	return r.loadResource(filename, "textures")
 }
 
-// State implements the core.ResourceSystem interface
-func (r *ResourceSystem) State(name string) []byte {
+// Pipeline implements the core.ResourceSystem interface
+func (r *ResourceSystem) Pipeline(name string) []byte {
 	var filename = name + ".json"
 	return r.loadResource(filename, "states")
 }

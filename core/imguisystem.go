@@ -174,13 +174,15 @@ func NewIMGUIScene(name string, inputComponent InputComponent) *Scene {
 	return s
 }
 
-// IMGUIRenderTechnique does z pre-pass, diffuse pass, transparency pass
-func IMGUIRenderTechnique(camera *Camera, materialBuckets map[*State][]*Node) {
-	renderer.Dispatch(&SetFramebufferCommand{camera.framebuffer})
-	renderer.Dispatch(&SetViewportCommand{camera.viewport})
-	renderer.Dispatch(&ClearCommand{camera.clearMode, camera.clearColor, camera.clearDepth})
-	var imguiState = resourceManager.State("imgui")
-	renderer.Dispatch(&BindStateCommand{imguiState})
-	renderer.Dispatch(&BindUniformBufferCommand{"cameraConstants", camera.constants.buffer})
-	renderer.Dispatch(&DrawIMGUICommand{})
+// IMGUIRenderTechnique renders the ImGui overlay.
+func IMGUIRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) {
+	desc := camera.MakeRenderPassDescriptor(
+		camera.clearMode&ClearColor != 0,
+		camera.clearMode&ClearDepth != 0,
+	)
+	pass := renderer.BeginRenderPass(desc)
+	pass.SetPipeline(resourceManager.Pipeline("imgui"))
+	pass.SetCameraConstants(camera.constants.buffer)
+	imgui.draw(pass)
+	pass.End()
 }

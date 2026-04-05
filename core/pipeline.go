@@ -35,20 +35,20 @@ func newPipelineCache() *pipelineCache {
 	}
 }
 
-func (pc *pipelineCache) getOrCreate(state *State, program *Program, colorFormat, depthFormat gpu.TextureFormat) gpu.RenderPipeline {
+func (pc *pipelineCache) getOrCreate(p *Pipeline, program *Program, colorFormat, depthFormat gpu.TextureFormat) gpu.RenderPipeline {
 	key := pipelineKey{
-		programName:       state.ProgramName,
-		topology:          state.Topology,
-		depthTest:         state.DepthTest,
-		depthWrite:        state.DepthWrite,
-		depthFunc:         state.DepthFunc,
-		blending:          state.Blending,
-		blendSrcMode:      state.BlendSrcMode,
-		blendDstMode:      state.BlendDstMode,
-		blendEquation:     state.BlendEquation,
-		culling:           state.Culling,
-		cullFace:          state.CullFace,
-		colorWrite:        state.ColorWrite,
+		programName:       p.ProgramName,
+		topology:          p.Topology,
+		depthTest:         p.DepthTest,
+		depthWrite:        p.DepthWrite,
+		depthFunc:         p.DepthFunc,
+		blending:          p.Blending,
+		blendSrcMode:      p.BlendSrcMode,
+		blendDstMode:      p.BlendDstMode,
+		blendEquation:     p.BlendEquation,
+		culling:           p.Culling,
+		cullFace:          p.CullFace,
+		colorWrite:        p.ColorWrite,
 		colorTargetFormat: colorFormat,
 		depthFormat:       depthFormat,
 	}
@@ -64,7 +64,7 @@ func (pc *pipelineCache) getOrCreate(state *State, program *Program, colorFormat
 		VertexEntry:  "main",
 		FragmentModule: program.fragmentModule,
 		FragmentEntry:  "main",
-		Primitive:    stateTopology(state.Topology),
+		Primitive:    stateTopology(p.Topology),
 		FrontFace:    gpu.FrontFaceCCW,
 	}
 
@@ -72,8 +72,8 @@ func (pc *pipelineCache) getOrCreate(state *State, program *Program, colorFormat
 	desc.Buffers = standardVertexBufferLayouts()
 
 	// Cull mode
-	if state.Culling {
-		switch state.CullFace {
+	if p.Culling {
+		switch p.CullFace {
 		case CullBack:
 			desc.CullMode = gpu.CullModeBack
 		case CullFront:
@@ -88,7 +88,7 @@ func (pc *pipelineCache) getOrCreate(state *State, program *Program, colorFormat
 	// Color target (skip for depth-only passes)
 	if colorFormat != gpu.TextureFormatUndefined {
 		writeMask := gpu.ColorWriteMaskAll
-		if !state.ColorWrite {
+		if !p.ColorWrite {
 			writeMask = gpu.ColorWriteMaskNone
 		}
 
@@ -97,11 +97,11 @@ func (pc *pipelineCache) getOrCreate(state *State, program *Program, colorFormat
 			WriteMask: writeMask,
 		}
 
-		if state.Blending {
-			srcFactor := mapBlendFactor(state.BlendSrcMode)
-			dstFactor := mapBlendFactor(state.BlendDstMode)
+		if p.Blending {
+			srcFactor := mapBlendFactor(p.BlendSrcMode)
+			dstFactor := mapBlendFactor(p.BlendDstMode)
 			blendOp := gpu.BlendOperationAdd
-			if state.BlendEquation == BlendFuncMax {
+			if p.BlendEquation == BlendFuncMax {
 				blendOp = gpu.BlendOperationMax
 			}
 			target.Blend = &gpu.BlendState{
@@ -116,8 +116,8 @@ func (pc *pipelineCache) getOrCreate(state *State, program *Program, colorFormat
 	// Depth stencil
 	if depthFormat != gpu.TextureFormatUndefined {
 		depthCompare := gpu.CompareFunctionAlways
-		if state.DepthTest {
-			switch state.DepthFunc {
+		if p.DepthTest {
+			switch p.DepthFunc {
 			case DepthLess:
 				depthCompare = gpu.CompareFunctionLess
 			case DepthLessEqual:
@@ -128,14 +128,14 @@ func (pc *pipelineCache) getOrCreate(state *State, program *Program, colorFormat
 		}
 		desc.DepthStencil = &gpu.DepthStencilState{
 			Format:            depthFormat,
-			DepthWriteEnabled: state.DepthWrite,
+			DepthWriteEnabled: p.DepthWrite,
 			DepthCompare:      depthCompare,
 		}
 	}
 
 	pipeline := renderer.device.CreateRenderPipeline(desc)
 	pc.cache[key] = pipeline
-	glog.Infof("Created pipeline for state: %s (program: %s)", state.Name, state.ProgramName)
+	glog.Infof("Created pipeline: %s (program: %s)", p.Name, p.ProgramName)
 	return pipeline
 }
 

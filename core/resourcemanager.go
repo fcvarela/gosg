@@ -11,17 +11,17 @@ type ResourceSystem interface {
 	Model(string) []byte
 	Texture(string) []byte
 	Program(string) []byte
-	State(string) []byte
+	Pipeline(string) []byte
 	ProgramData(string) []byte
 }
 
 // ResourceManager wraps a resourcesystem and contains configuration about the location of each resource type.
 type ResourceManager struct {
-	system   ResourceSystem
-	programs map[string]*Program
-	states   map[string]*State
-	models   map[string]*Node
-	textures map[string]*Texture
+	system    ResourceSystem
+	programs  map[string]*Program
+	pipelines map[string]*Pipeline
+	models    map[string]*Node
+	textures  map[string]*Texture
 }
 
 var (
@@ -30,10 +30,10 @@ var (
 
 func init() {
 	resourceManager = &ResourceManager{
-		programs: make(map[string]*Program),
-		states:   make(map[string]*State),
-		models:   make(map[string]*Node),
-		textures: make(map[string]*Texture),
+		programs:  make(map[string]*Program),
+		pipelines: make(map[string]*Pipeline),
+		models:    make(map[string]*Node),
+		textures:  make(map[string]*Texture),
 	}
 }
 
@@ -68,18 +68,18 @@ func (r *ResourceManager) Program(name string) *Program {
 	return r.programs[name]
 }
 
-// State returns a State parsed from JSON.
-func (r *ResourceManager) State(name string) *State {
-	if r.states[name] == nil {
-		resource := r.system.State(name)
-		state, err := ParseState(resource)
+// Pipeline returns a Pipeline parsed from JSON.
+func (r *ResourceManager) Pipeline(name string) *Pipeline {
+	if r.pipelines[name] == nil {
+		resource := r.system.Pipeline(name)
+		pipeline, err := ParsePipeline(resource)
 		if err != nil {
-			glog.Fatalf("Cannot parse state %s: %v", name, err)
+			glog.Fatalf("Cannot parse pipeline %s: %v", name, err)
 		}
-		state.Name = name
-		r.states[name] = state
+		pipeline.Name = name
+		r.pipelines[name] = pipeline
 	}
-	return r.states[name]
+	return r.pipelines[name]
 }
 
 // ProgramData returns source file contents for a given program or subprogram

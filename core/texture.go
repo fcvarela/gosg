@@ -1,13 +1,17 @@
 package core
 
 import (
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/fcvarela/gosg/gpu"
 )
 
+var nextTextureID uint32
+
 // Texture holds a GPU texture, its view, sampler, and descriptor.
 type Texture struct {
+	id         uint32
 	texture    gpu.Texture
 	view       gpu.TextureView
 	sampler    gpu.Sampler
@@ -24,20 +28,13 @@ func (t *Texture) Handle() unsafe.Pointer {
 	return unsafe.Pointer(t)
 }
 
-// Lt is used for sorting textures.
-func (t *Texture) Lt(other *Texture) bool {
-	if other == nil {
-		return false
-	}
-	return uintptr(unsafe.Pointer(t)) < uintptr(unsafe.Pointer(other))
+// ID returns the texture's numeric ID.
+func (t *Texture) ID() uint32 {
+	return t.id
 }
 
-// Gt is used for sorting textures.
-func (t *Texture) Gt(other *Texture) bool {
-	if other == nil {
-		return false
-	}
-	return uintptr(unsafe.Pointer(t)) > uintptr(unsafe.Pointer(other))
+func allocateTextureID() uint32 {
+	return atomic.AddUint32(&nextTextureID, 1)
 }
 
 // SetFilter recreates the sampler with the given filter mode.

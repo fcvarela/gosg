@@ -128,15 +128,22 @@ func (s *Scene) cull() {
 	}
 
 	for _, c := range s.cameraList {
-		for bk := range c.stateBuckets {
-			c.stateBuckets[bk] = c.stateBuckets[bk][:0]
+		for bk := range c.pipelineBuckets {
+			c.pipelineBuckets[bk] = c.pipelineBuckets[bk][:0]
 			c.visibleOpaqueNodes = c.visibleOpaqueNodes[:0]
 		}
 
 		c.scene.CullComponent().Run(s, c, c.scene)
 
-		for bk := range c.stateBuckets {
-			sort.Sort(NodesByMaterial(c.stateBuckets[bk]))
+		for bk := range c.pipelineBuckets {
+			for _, n := range c.pipelineBuckets[bk] {
+				var meshID uint32
+				if n.mesh != nil {
+					meshID = n.mesh.id
+				}
+				n.sortKey = (n.material.sortKey << 32) | uint64(meshID)
+			}
+			sort.Sort(NodesByMaterial(c.pipelineBuckets[bk]))
 		}
 		sort.Sort(NodesByCameraDistanceNearToFar{c.visibleOpaqueNodes, c.node})
 	}
@@ -153,6 +160,6 @@ func (s *Scene) draw() {
 		}
 
 		camera.constants.SetData(camera.ProjectionMatrix(), camera.ViewMatrix(), s.lights)
-		camera.renderTechnique(camera, camera.stateBuckets)
+		camera.renderTechnique(camera, camera.pipelineBuckets)
 	}
 }

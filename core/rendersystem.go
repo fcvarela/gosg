@@ -17,62 +17,6 @@ import (
 	_ "golang.org/x/image/bmp"
 )
 
-// RenderCommand is a generic render command item
-type RenderCommand interface{}
-
-// DebugCommand logs a message
-type DebugCommand struct {
-	Message string
-}
-
-// SetViewportCommand sets the current viewport
-type SetViewportCommand struct {
-	Viewport mgl32.Vec4
-}
-
-// SetFramebufferCommand sets the current framebuffer
-type SetFramebufferCommand struct {
-	Framebuffer *Framebuffer
-}
-
-// ClearCommand clears the current framebuffer
-type ClearCommand struct {
-	ClearMode  ClearMode
-	ClearColor mgl32.Vec4
-	ClearDepth float64
-}
-
-// BindStateCommand binds the passed state
-type BindStateCommand struct {
-	State *State
-}
-
-// BindUniformBufferCommand binds the passed uniform buffer
-type BindUniformBufferCommand struct {
-	Name          string
-	UniformBuffer *UniformBuffer
-}
-
-// BindDescriptorsCommand binds the passed descriptors
-type BindDescriptorsCommand struct {
-	Descriptors *Descriptors
-}
-
-// DrawInstancedCommand draws a mesh using instancing
-type DrawInstancedCommand struct {
-	Mesh          *Mesh
-	InstanceCount int
-	InstanceData  unsafe.Pointer
-}
-
-// DrawIMGUICommand draws an IMGUI
-type DrawIMGUICommand struct{}
-
-// DrawCommand draws a mesh
-type DrawCommand struct {
-	Mesh *Mesh
-}
-
 // InstanceData holds the per-instance-data when using instanced drawing.
 type InstanceData struct {
 	ModelMatrix               mgl32.Mat4
@@ -88,6 +32,155 @@ const (
 	InstanceDataLen = (2*16 + 4*4) * 4
 )
 
+// RenderPassColorAttachment describes a color attachment for a render pass.
+type RenderPassColorAttachment struct {
+	View       gpu.TextureView
+	Format     gpu.TextureFormat // gpu.TextureFormatUndefined means use swap chain format
+	LoadOp     gpu.LoadOp
+	ClearColor mgl32.Vec4
+}
+
+// RenderPassDepthAttachment describes a depth attachment for a render pass.
+type RenderPassDepthAttachment struct {
+	View       gpu.TextureView
+	Format     gpu.TextureFormat // gpu.TextureFormatUndefined means Depth32Float
+	LoadOp     gpu.LoadOp
+	ClearDepth float32
+}
+
+// RenderPassDescriptor describes how to create a render pass.
+type RenderPassDescriptor struct {
+	ColorAttachments []RenderPassColorAttachment
+	DepthAttachment  *RenderPassDepthAttachment
+	Viewport         mgl32.Vec4
+}
+
+// RenderPass wraps a gpu.RenderPassEncoder with engine-level convenience methods.
+type RenderPass struct {
+	encoder        gpu.RenderPassEncoder
+	currentProgram *Program
+	colorFormat    gpu.TextureFormat
+	depthFormat    gpu.TextureFormat
+}
+
+// SetPipeline looks up (or creates) the GPU pipeline for the given pipeline config and binds it.
+// Returns false if the pipeline has no program and was not set.
+func (rp *RenderPass) SetPipeline(p *Pipeline) bool {
+	if p.ProgramName == "" {
+		return false
+	}
+	program := resourceManager.Program(p.ProgramName)
+	if program == nil {
+		return false
+	}
+	rp.currentProgram = program
+
+	pipeline := renderer.pipelines.getOrCreate(p, program, rp.colorFormat, rp.depthFormat)
+	rp.encoder.SetPipeline(pipeline)
+	return true
+}
+
+// SetCameraConstants creates a bind group for the UBO at group 0 and binds it.
+func (rp *RenderPass) SetCameraConstants(ubo *UniformBuffer) {
+	if rp.currentProgram == nil || ubo == nil {
+		return
+	}
+	if len(rp.currentProgram.bindGroupLayouts) == 0 {
+		return
+	}
+	bg := renderer.device.CreateBindGroup(rp.currentProgram.bindGroupLayouts[0], []gpu.BindGroupEntry{{
+		Binding: 0,
+		Buffer:  ubo.buffer,
+		Offset:  0,
+		Size:    ubo.size,
+	}})
+	rp.encoder.SetBindGroup(0, bg)
+}
+
+// SetMaterial creates a bind group for textures at group 1 and binds it.
+func (rp *RenderPass) SetMaterial(mat *Material) {
+	if rp.currentProgram == nil {
+		return
+	}
+	if len(rp.currentProgram.bindGroupLayouts) < 2 || len(rp.currentProgram.spec.TextureBindings) == 0 {
+		return
+	}
+	entries := make([]gpu.BindGroupEntry, 0, len(rp.currentProgram.spec.TextureBindings)*2)
+	for texName, binding := range rp.currentProgram.spec.TextureBindings {
+		tex := mat.Texture(texName)
+		if tex == nil {
+			// Pick default based on the bind group layout's expected sample type
+			isDepth := false
+			if len(rp.currentProgram.spec.BindGroupLayouts) > int(binding.Group) {
+				for _, e := range rp.currentProgram.spec.BindGroupLayouts[binding.Group].Entries {
+					if e.Binding == binding.TextureBinding && e.Texture != nil && e.Texture.SampleType == "depth" {
+						isDepth = true
+					}
+				}
+			}
+			if isDepth {
+				tex = renderer.defaultDepthTexture
+			} else {
+				tex = renderer.defaultTexture
+			}
+		}
+		entries = append(entries,
+			gpu.BindGroupEntry{Binding: binding.TextureBinding, TextureView: tex.view},
+			gpu.BindGroupEntry{Binding: binding.SamplerBinding, Sampler: tex.sampler},
+		)
+	}
+	if len(entries) > 0 {
+		bg := renderer.device.CreateBindGroup(rp.currentProgram.bindGroupLayouts[1], entries)
+		rp.encoder.SetBindGroup(1, bg)
+	}
+}
+
+// SetViewport sets the viewport on the render pass.
+func (rp *RenderPass) SetViewport(x, y, w, h float32) {
+	rp.encoder.SetViewport(x, y, w, h, 0.0, 1.0)
+}
+
+// SetScissorRect sets the scissor rectangle.
+func (rp *RenderPass) SetScissorRect(x, y, w, h uint32) {
+	rp.encoder.SetScissorRect(x, y, w, h)
+}
+
+// SetVertexBuffer binds a vertex buffer to a slot.
+func (rp *RenderPass) SetVertexBuffer(slot uint32, buf gpu.Buffer, offset, size uint64) {
+	rp.encoder.SetVertexBuffer(slot, buf, offset, size)
+}
+
+// SetIndexBuffer binds an index buffer.
+func (rp *RenderPass) SetIndexBuffer(buf gpu.Buffer, format gpu.IndexFormat, offset, size uint64) {
+	rp.encoder.SetIndexBuffer(buf, format, offset, size)
+}
+
+// SetGPUPipeline sets a raw GPU pipeline directly.
+func (rp *RenderPass) SetGPUPipeline(pipeline gpu.RenderPipeline) {
+	rp.encoder.SetPipeline(pipeline)
+}
+
+// SetBindGroup sets a bind group directly.
+func (rp *RenderPass) SetBindGroup(group uint32, bg gpu.BindGroup) {
+	rp.encoder.SetBindGroup(group, bg)
+}
+
+// DrawIndexed issues an indexed draw call.
+func (rp *RenderPass) DrawIndexed(indexCount, instanceCount, firstIndex uint32, baseVertex int32, firstInstance uint32) {
+	rp.encoder.DrawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance)
+}
+
+// End ends the render pass.
+func (rp *RenderPass) End() {
+	rp.encoder.End()
+	rp.encoder.Release()
+}
+
+// CurrentProgram returns the currently bound program (for ImGui rendering).
+func (rp *RenderPass) CurrentProgram() *Program {
+	return rp.currentProgram
+}
+
 // Renderer holds the wgpu device, queue, and rendering state.
 type Renderer struct {
 	instance      gpu.Instance
@@ -102,18 +195,9 @@ type Renderer struct {
 	swapChainTexture gpu.Texture
 	swapChainView    gpu.TextureView
 	encoder          gpu.CommandEncoder
-	currentRenderPass gpu.RenderPassEncoder
-	renderPassActive  bool
 
-	// Pending state for deferred render pass begin
-	pendingFramebuffer *Framebuffer
-	pendingViewport    mgl32.Vec4
-	pendingClear       *ClearCommand
-	pipelineSet        bool
-
-	// Current bound state
-	currentProgram *Program
-	pipelines      *pipelineCache
+	// Pipeline cache and defaults
+	pipelines           *pipelineCache
 	defaultTexture      *Texture
 	defaultDepthTexture *Texture
 
@@ -178,6 +262,7 @@ func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) {
 		Compare:      gpu.CompareFunctionLessEqual,
 	})
 	r.defaultDepthTexture = &Texture{
+		id:      allocateTextureID(),
 		texture: defaultDepthTex, view: defaultDepthView, sampler: defaultDepthSampler,
 		descriptor: TextureDescriptor{Format: TextureFormatDEPTH, SizedFormat: TextureSizedFormatDEPTH32F},
 	}
@@ -243,7 +328,7 @@ func (r *Renderer) NewTexture(d TextureDescriptor, data []byte) *Texture {
 	view := tex.CreateView()
 	sampler := r.createSampler(d)
 
-	return &Texture{texture: tex, view: view, sampler: sampler, descriptor: d}
+	return &Texture{texture: tex, view: view, sampler: sampler, descriptor: d, id: allocateTextureID()}
 }
 
 // NewTextureFromImageData creates a texture from encoded image bytes.
@@ -291,145 +376,9 @@ func (r *Renderer) NewUniformBuffer() *UniformBuffer {
 	return NewUniformBuffer()
 }
 
-// Dispatch executes a render command.
-func (r *Renderer) Dispatch(cmd RenderCommand) {
-	switch t := cmd.(type) {
-	case *DebugCommand:
-		glog.Info(t.Message)
-
-	case *SetFramebufferCommand:
-		// End current render pass when framebuffer changes
-		r.endCurrentRenderPass()
-		r.pendingFramebuffer = t.Framebuffer
-		r.pendingClear = nil
-
-	case *SetViewportCommand:
-		r.pendingViewport = t.Viewport
-		if r.renderPassActive {
-			r.currentRenderPass.SetViewport(
-				t.Viewport[0], t.Viewport[1],
-				t.Viewport[2], t.Viewport[3],
-				0.0, 1.0,
-			)
-		}
-
-	case *ClearCommand:
-		r.pendingClear = t
-
-	case *BindStateCommand:
-		r.ensureRenderPass()
-		if t.State.ProgramName == "" {
-			break
-		}
-		program := resourceManager.Program(t.State.ProgramName)
-		if program == nil {
-			break
-		}
-		r.currentProgram = program
-
-		// Determine current target formats
-		colorFormat := r.surfaceFormat
-		depthFormat := gpu.TextureFormatUndefined
-		if r.pendingFramebuffer != nil {
-			if len(r.pendingFramebuffer.colorAttachments) > 0 {
-				colorFormat = sizedFormatToGPU(r.pendingFramebuffer.colorAttachments[0].descriptor.SizedFormat)
-			} else {
-				colorFormat = gpu.TextureFormatUndefined
-			}
-			if r.pendingFramebuffer.depthAttachment != nil {
-				depthFormat = sizedFormatToGPU(r.pendingFramebuffer.depthAttachment.descriptor.SizedFormat)
-			}
-		}
-
-		pipeline := r.pipelines.getOrCreate(t.State, program, colorFormat, depthFormat)
-		r.currentRenderPass.SetPipeline(pipeline)
-		r.pipelineSet = true
-
-	case *BindUniformBufferCommand:
-		// Create a bind group for the UBO at group 0
-		if r.currentProgram == nil || !r.renderPassActive || t.UniformBuffer == nil {
-			break
-		}
-		if len(r.currentProgram.bindGroupLayouts) == 0 {
-			break
-		}
-		bg := renderer.device.CreateBindGroup(r.currentProgram.bindGroupLayouts[0], []gpu.BindGroupEntry{{
-			Binding: 0,
-			Buffer:  t.UniformBuffer.buffer,
-			Offset:  0,
-			Size:    t.UniformBuffer.size,
-		}})
-		r.currentRenderPass.SetBindGroup(0, bg)
-
-	case *BindDescriptorsCommand:
-		// Create bind group for textures at group 1
-		if r.currentProgram == nil || !r.renderPassActive {
-			break
-		}
-		if len(r.currentProgram.bindGroupLayouts) < 2 || len(r.currentProgram.spec.TextureBindings) == 0 {
-			break
-		}
-		entries := make([]gpu.BindGroupEntry, 0, len(r.currentProgram.spec.TextureBindings)*2)
-		for texName, binding := range r.currentProgram.spec.TextureBindings {
-			tex := t.Descriptors.Texture(texName)
-			if tex == nil {
-				// Pick default based on the bind group layout's expected sample type
-				isDepth := false
-				if len(r.currentProgram.spec.BindGroupLayouts) > int(binding.Group) {
-					for _, e := range r.currentProgram.spec.BindGroupLayouts[binding.Group].Entries {
-						if e.Binding == binding.TextureBinding && e.Texture != nil && e.Texture.SampleType == "depth" {
-							isDepth = true
-						}
-					}
-				}
-				if isDepth {
-					tex = r.defaultDepthTexture
-				} else {
-					tex = r.defaultTexture
-				}
-			}
-			entries = append(entries,
-				gpu.BindGroupEntry{Binding: binding.TextureBinding, TextureView: tex.view},
-				gpu.BindGroupEntry{Binding: binding.SamplerBinding, Sampler: tex.sampler},
-			)
-		}
-		if len(entries) > 0 {
-			bg := renderer.device.CreateBindGroup(r.currentProgram.bindGroupLayouts[1], entries)
-			r.currentRenderPass.SetBindGroup(1, bg)
-		}
-
-	case *DrawInstancedCommand:
-		r.ensureRenderPass()
-		if t.Mesh != nil {
-			t.Mesh.DrawInstanced(t.InstanceCount, t.InstanceData)
-		}
-
-	case *DrawCommand:
-		r.ensureRenderPass()
-		if t.Mesh != nil {
-			t.Mesh.Draw()
-		}
-
-	case *DrawIMGUICommand:
-		r.ensureRenderPass()
-		if r.currentProgram != nil {
-			imgui.draw(r.currentProgram)
-		}
-
-	default:
-		glog.Errorf("Unsupported command type: %T", t)
-	}
-}
-
-// CanBatch returns whether two descriptors can be batched.
-func (r *Renderer) CanBatch(a *Descriptors, b *Descriptors) bool {
-	for name, tb := range b.Textures() {
-		ta, ok := a.Textures()[name]
-		if !ok || ta != tb {
-			return false
-		}
-	}
-	return true
+// CanBatch returns whether two materials can be batched (same textures).
+func (r *Renderer) CanBatch(a *Material, b *Material) bool {
+	return a.sortKey == b.sortKey
 }
 
 // BeginFrame acquires the swap chain texture and creates a command encoder.
@@ -443,24 +392,79 @@ func (r *Renderer) BeginFrame() {
 	r.swapChainTexture = st.Texture
 	r.swapChainView = r.swapChainTexture.CreateView()
 	r.encoder = r.device.CreateCommandEncoder()
-	r.renderPassActive = false
-	r.pendingClear = nil
-	r.pendingFramebuffer = nil
 }
 
-// Flush ends the current render pass, submits, and starts a new command encoder.
+// BeginRenderPass creates a new render pass from the descriptor.
+func (r *Renderer) BeginRenderPass(desc RenderPassDescriptor) *RenderPass {
+	gpuDesc := gpu.RenderPassDescriptor{}
+
+	colorFormat := gpu.TextureFormatUndefined
+	depthFormat := gpu.TextureFormatUndefined
+
+	if len(desc.ColorAttachments) > 0 {
+		ca := desc.ColorAttachments[0]
+		colorView := ca.View
+		if colorView == (gpu.TextureView{}) {
+			colorView = r.swapChainView
+		}
+		colorFormat = ca.Format
+		if colorFormat == gpu.TextureFormatUndefined {
+			colorFormat = r.surfaceFormat
+		}
+
+		clearColor := gpu.Color{
+			R: float64(ca.ClearColor[0]),
+			G: float64(ca.ClearColor[1]),
+			B: float64(ca.ClearColor[2]),
+			A: float64(ca.ClearColor[3]),
+		}
+
+		gpuDesc.ColorAttachments = []gpu.RenderPassColorAttachment{{
+			View:       colorView,
+			LoadOp:     ca.LoadOp,
+			StoreOp:    gpu.StoreOpStore,
+			ClearValue: clearColor,
+		}}
+	}
+
+	if desc.DepthAttachment != nil {
+		depthFormat = desc.DepthAttachment.Format
+		if depthFormat == gpu.TextureFormatUndefined {
+			depthFormat = gpu.TextureFormatDepth32Float
+		}
+		gpuDesc.DepthStencilAttachment = &gpu.RenderPassDepthStencilAttachment{
+			View:            desc.DepthAttachment.View,
+			DepthLoadOp:     desc.DepthAttachment.LoadOp,
+			DepthStoreOp:    gpu.StoreOpStore,
+			DepthClearValue: desc.DepthAttachment.ClearDepth,
+		}
+	}
+
+	enc := r.encoder.BeginRenderPass(gpuDesc)
+
+	rp := &RenderPass{
+		encoder:     enc,
+		colorFormat: colorFormat,
+		depthFormat: depthFormat,
+	}
+
+	if desc.Viewport != (mgl32.Vec4{}) {
+		rp.SetViewport(desc.Viewport[0], desc.Viewport[1], desc.Viewport[2], desc.Viewport[3])
+	}
+
+	return rp
+}
+
+// Flush submits the current command encoder and starts a new one.
 // Use between draw sequences that write to the same buffers.
 func (r *Renderer) Flush() {
-	r.endCurrentRenderPass()
 	cmdBuf := r.encoder.Finish()
 	r.queue.Submit(cmdBuf)
 	r.encoder = r.device.CreateCommandEncoder()
 }
 
-// EndFrame ends the current render pass, submits, and presents.
+// EndFrame submits the command buffer and presents.
 func (r *Renderer) EndFrame() {
-	r.endCurrentRenderPass()
-
 	cmdBuf := r.encoder.Finish()
 	r.queue.Submit(cmdBuf)
 	r.surface.Present()
@@ -468,92 +472,6 @@ func (r *Renderer) EndFrame() {
 	r.swapChainView.Release()
 	r.swapChainView = gpu.TextureView{}
 	r.swapChainTexture = gpu.Texture{}
-}
-
-func (r *Renderer) endCurrentRenderPass() {
-	if r.renderPassActive {
-		r.currentRenderPass.End()
-		r.currentRenderPass.Release()
-		r.currentRenderPass = gpu.RenderPassEncoder{}
-		r.renderPassActive = false
-		r.pipelineSet = false
-	}
-}
-
-func (r *Renderer) ensureRenderPass() {
-	if r.renderPassActive {
-		return
-	}
-
-	desc := gpu.RenderPassDescriptor{}
-
-	// Determine if we have a color attachment
-	hasColor := true
-	if r.pendingFramebuffer != nil && len(r.pendingFramebuffer.colorAttachments) == 0 {
-		hasColor = false
-	}
-
-	if hasColor {
-		var colorView gpu.TextureView
-		if r.pendingFramebuffer != nil && len(r.pendingFramebuffer.colorAttachments) > 0 {
-			colorView = r.pendingFramebuffer.colorAttachments[0].view
-		} else {
-			colorView = r.swapChainView
-		}
-
-		colorLoadOp := gpu.LoadOpLoad
-		colorClear := gpu.Color{R: 0, G: 0, B: 0, A: 1}
-		if r.pendingClear != nil && r.pendingClear.ClearMode&ClearColor != 0 {
-			colorLoadOp = gpu.LoadOpClear
-			colorClear = gpu.Color{
-				R: float64(r.pendingClear.ClearColor[0]),
-				G: float64(r.pendingClear.ClearColor[1]),
-				B: float64(r.pendingClear.ClearColor[2]),
-				A: float64(r.pendingClear.ClearColor[3]),
-			}
-		}
-
-		desc.ColorAttachments = []gpu.RenderPassColorAttachment{{
-			View:       colorView,
-			LoadOp:     colorLoadOp,
-			StoreOp:    gpu.StoreOpStore,
-			ClearValue: colorClear,
-		}}
-	}
-
-	// Depth attachment
-	var depthView gpu.TextureView
-	if r.pendingFramebuffer != nil && r.pendingFramebuffer.depthAttachment != nil {
-		depthView = r.pendingFramebuffer.depthAttachment.view
-	}
-	if depthView != (gpu.TextureView{}) {
-		depthLoadOp := gpu.LoadOpLoad
-		depthClearValue := float32(1.0)
-		if r.pendingClear != nil && r.pendingClear.ClearMode&ClearDepth != 0 {
-			depthLoadOp = gpu.LoadOpClear
-			depthClearValue = float32(r.pendingClear.ClearDepth)
-		}
-		desc.DepthStencilAttachment = &gpu.RenderPassDepthStencilAttachment{
-			View:            depthView,
-			DepthLoadOp:     depthLoadOp,
-			DepthStoreOp:    gpu.StoreOpStore,
-			DepthClearValue: depthClearValue,
-		}
-	}
-
-	r.currentRenderPass = r.encoder.BeginRenderPass(desc)
-	r.renderPassActive = true
-
-	// Apply viewport
-	if r.pendingViewport != (mgl32.Vec4{}) {
-		r.currentRenderPass.SetViewport(
-			r.pendingViewport[0], r.pendingViewport[1],
-			r.pendingViewport[2], r.pendingViewport[3],
-			0.0, 1.0,
-		)
-	}
-
-	r.pendingClear = nil
 }
 
 func (r *Renderer) createSampler(d TextureDescriptor) gpu.Sampler {
@@ -650,53 +568,61 @@ func bytesPerPixelForFormat(f TextureSizedFormat) uint32 {
 	}
 }
 
-// DefaultRenderTechnique does z pre-pass, diffuse pass, transparency pass
-func DefaultRenderTechnique(camera *Camera, materialBuckets map[*State][]*Node) {
-	renderer.Dispatch(&SetFramebufferCommand{camera.framebuffer})
-	renderer.Dispatch(&SetViewportCommand{camera.viewport})
-	renderer.Dispatch(&ClearCommand{camera.clearMode, camera.clearColor, camera.clearDepth})
-
-	// draw zpass
+// DefaultRenderTechnique does z pre-pass, opaque pass, transparency pass.
+func DefaultRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) {
+	// Z-prepass
+	zDesc := camera.MakeRenderPassDescriptor(true, true)
+	zPass := renderer.BeginRenderPass(zDesc)
 	for m, nodes := range materialBuckets {
 		if len(nodes) == 0 || m.Blending {
 			continue
 		}
-		var zpassState = resourceManager.State(fmt.Sprintf("%s-z", nodes[0].state.Name))
-		renderer.Dispatch(&BindStateCommand{zpassState})
-		renderer.Dispatch(&BindUniformBufferCommand{"cameraConstants", camera.constants.buffer})
-		RenderBatchedNodes(camera, nodes)
+		zpassState := resourceManager.Pipeline(fmt.Sprintf("%s-z", nodes[0].pipeline.Name))
+		if !zPass.SetPipeline(zpassState) {
+			continue
+		}
+		zPass.SetCameraConstants(camera.constants.buffer)
+		RenderBatchedNodes(zPass, camera, nodes)
 	}
+	zPass.End()
 
 	// Flush — opaque pass reuses the same mesh instance buffers
 	renderer.Flush()
-	renderer.Dispatch(&SetFramebufferCommand{camera.framebuffer})
-	renderer.Dispatch(&SetViewportCommand{camera.viewport})
 
-	// draw opaque pass
+	// Opaque pass
+	opaqueDesc := camera.MakeRenderPassDescriptor(false, false)
+	opaquePass := renderer.BeginRenderPass(opaqueDesc)
 	for m, nodes := range materialBuckets {
 		if len(nodes) == 0 || m.Blending {
 			continue
 		}
-		renderer.Dispatch(&BindStateCommand{nodes[0].state})
-		renderer.Dispatch(&BindUniformBufferCommand{"cameraConstants", camera.constants.buffer})
-		RenderBatchedNodes(camera, nodes)
+		if !opaquePass.SetPipeline(nodes[0].pipeline) {
+			continue
+		}
+		opaquePass.SetCameraConstants(camera.constants.buffer)
+		RenderBatchedNodes(opaquePass, camera, nodes)
 	}
 
-	// transparent pass
+	// Transparent pass (same render pass as opaque)
 	for m, nodes := range materialBuckets {
 		if len(nodes) == 0 || !m.Blending {
 			continue
 		}
-		renderer.Dispatch(&BindStateCommand{nodes[0].state})
-		renderer.Dispatch(&BindUniformBufferCommand{"cameraConstants", camera.constants.buffer})
-		RenderBatchedNodes(camera, nodes)
+		if !opaquePass.SetPipeline(nodes[0].pipeline) {
+			continue
+		}
+		opaquePass.SetCameraConstants(camera.constants.buffer)
+		RenderBatchedNodes(opaquePass, camera, nodes)
 	}
+	opaquePass.End()
 }
 
-// AABBRenderTechnique draws AABBs for all nodes
-func AABBRenderTechnique(camera *Camera, materialBuckets map[*State][]*Node) {
-	renderer.Dispatch(&BindStateCommand{resourceManager.State("aabb")})
-	renderer.Dispatch(&BindUniformBufferCommand{"cameraConstants", camera.constants.buffer})
+// AABBRenderTechnique draws AABBs for all nodes.
+func AABBRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) {
+	desc := camera.MakeRenderPassDescriptor(false, false)
+	pass := renderer.BeginRenderPass(desc)
+	pass.SetPipeline(resourceManager.Pipeline("aabb"))
+	pass.SetCameraConstants(camera.constants.buffer)
 
 	// Collect all nodes across all buckets into a single instance array
 	var instanceData [MaxInstances]InstanceData
@@ -706,38 +632,39 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*State][]*Node) {
 			if count >= MaxInstances {
 				break
 			}
-			var center = n.worldBounds.Center()
-			var size = n.worldBounds.Size()
-			var transform64 = mgl64.Translate3D(center[0], center[1], center[2]).Mul4(mgl64.Scale3D(size[0], size[1], size[2]))
+			center := n.worldBounds.Center()
+			size := n.worldBounds.Size()
+			transform64 := mgl64.Translate3D(center[0], center[1], center[2]).Mul4(mgl64.Scale3D(size[0], size[1], size[2]))
 			instanceData[count].ModelMatrix = Mat4DoubleToFloat(transform64)
 			count++
 		}
 	}
 	if count > 0 {
-		renderer.Dispatch(&DrawInstancedCommand{Mesh: AABBMesh(), InstanceCount: count, InstanceData: unsafe.Pointer(&instanceData)})
+		AABBMesh().DrawInstanced(pass, count, unsafe.Pointer(&instanceData))
 	}
+	pass.End()
 }
 
-// DebugRenderTechnique runs the default render path followed by AABBs
-func DebugRenderTechnique(camera *Camera, materialBuckets map[*State][]*Node) {
+// DebugRenderTechnique runs the default render path followed by AABBs.
+func DebugRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) {
 	DefaultRenderTechnique(camera, materialBuckets)
 	AABBRenderTechnique(camera, materialBuckets)
 }
 
-// RenderBatchedNodes splits a list of nodes into batched items
-func RenderBatchedNodes(camera *Camera, nodes []*Node) {
-	var lastBatchIndex = 0
+// RenderBatchedNodes splits a list of nodes into batched items.
+func RenderBatchedNodes(pass *RenderPass, camera *Camera, nodes []*Node) {
+	lastBatchIndex := 0
 	for i := 1; i < len(nodes); i++ {
-		if !renderer.CanBatch(nodes[i].MaterialData(), nodes[i-1].MaterialData()) {
-			RenderBatch(camera, nodes[lastBatchIndex:i])
+		if !renderer.CanBatch(nodes[i].Material(), nodes[i-1].Material()) {
+			RenderBatch(pass, camera, nodes[lastBatchIndex:i])
 			lastBatchIndex = i
 		}
 	}
-	RenderBatch(camera, nodes[lastBatchIndex:])
+	RenderBatch(pass, camera, nodes[lastBatchIndex:])
 }
 
-// RenderBatch renders a batch of drawables sharing the same state and descriptors
-func RenderBatch(camera *Camera, nodes []*Node) {
+// RenderBatch renders a batch of drawables sharing the same state and descriptors.
+func RenderBatch(pass *RenderPass, camera *Camera, nodes []*Node) {
 	if len(nodes) == 0 {
 		return
 	}
@@ -748,8 +675,8 @@ func RenderBatch(camera *Camera, nodes []*Node) {
 		mvpMatrix64 := camera.projectionMatrix.Mul4(camera.viewMatrix.Mul4(mMatrix64))
 		instanceData[i].ModelMatrix = Mat4DoubleToFloat(mMatrix64)
 		instanceData[i].ModelViewProjectionMatrix = Mat4DoubleToFloat(mvpMatrix64)
-		instanceData[i].Custom = n.materialData.instanceData
+		instanceData[i].Custom = n.material.instanceData
 	}
-	renderer.Dispatch(&BindDescriptorsCommand{Descriptors: &nodes[0].materialData})
-	renderer.Dispatch(&DrawInstancedCommand{Mesh: nodes[0].mesh, InstanceCount: len(nodes), InstanceData: unsafe.Pointer(&instanceData)})
+	pass.SetMaterial(&nodes[0].material)
+	nodes[0].mesh.DrawInstanced(pass, len(nodes), unsafe.Pointer(&instanceData))
 }

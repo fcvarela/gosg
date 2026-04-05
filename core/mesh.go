@@ -1,6 +1,7 @@
 package core
 
 import (
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/fcvarela/gosg/gpu"
@@ -17,8 +18,11 @@ const (
 	PrimitiveTypeLines
 )
 
+var nextMeshID uint32
+
 // Mesh holds geometry data backed by GPU buffers.
 type Mesh struct {
+	id             uint32
 	name           string
 	bounds         *AABB
 	primitiveType  PrimitiveType
@@ -37,6 +41,7 @@ type Mesh struct {
 // NewMesh creates a new empty mesh.
 func NewMesh() *Mesh {
 	m := &Mesh{
+		id:     atomic.AddUint32(&nextMeshID, 1),
 		bounds: NewAABB(),
 	}
 	// Pre-allocate instance buffer for instanced drawing
@@ -93,45 +98,26 @@ func (m *Mesh) SetIndices(indices []uint16) {
 	renderer.queue.WriteBuffer(m.indexBuffer, 0, unsafe.Pointer(&padded[0]), m.indexSize)
 }
 
-func (m *Mesh) Draw() {
-	// Skip if no render pass or no pipeline set yet
-	if !renderer.renderPassActive {
-		return
-	}
-	renderer.currentRenderPass.SetVertexBuffer(0, m.positionBuffer, 0, m.positionSize)
-	renderer.currentRenderPass.SetVertexBuffer(1, m.normalBuffer, 0, m.normalSize)
-	renderer.currentRenderPass.SetVertexBuffer(2, m.texCoordBuffer, 0, m.texCoordSize)
-	renderer.currentRenderPass.SetIndexBuffer(m.indexBuffer, gpu.IndexFormatUint16, 0, m.indexSize)
-	renderer.currentRenderPass.DrawIndexed(m.indexCount, 1, 0, 0, 0)
+func (m *Mesh) Draw(rp *RenderPass) {
+	rp.SetVertexBuffer(0, m.positionBuffer, 0, m.positionSize)
+	rp.SetVertexBuffer(1, m.normalBuffer, 0, m.normalSize)
+	rp.SetVertexBuffer(2, m.texCoordBuffer, 0, m.texCoordSize)
+	rp.SetIndexBuffer(m.indexBuffer, gpu.IndexFormatUint16, 0, m.indexSize)
+	rp.DrawIndexed(m.indexCount, 1, 0, 0, 0)
 }
 
-func (m *Mesh) DrawInstanced(instanceCount int, instanceData unsafe.Pointer) {
-	if !renderer.renderPassActive || !renderer.pipelineSet {
-		return
-	}
+func (m *Mesh) DrawInstanced(rp *RenderPass, instanceCount int, instanceData unsafe.Pointer) {
 	dataSize := uint64(instanceCount * InstanceDataLen)
 	renderer.queue.WriteBuffer(m.instanceBuffer, 0, instanceData, dataSize)
-	renderer.currentRenderPass.SetVertexBuffer(0, m.positionBuffer, 0, m.positionSize)
-	renderer.currentRenderPass.SetVertexBuffer(1, m.normalBuffer, 0, m.normalSize)
-	renderer.currentRenderPass.SetVertexBuffer(2, m.texCoordBuffer, 0, m.texCoordSize)
-	renderer.currentRenderPass.SetVertexBuffer(3, m.instanceBuffer, 0, dataSize)
-	renderer.currentRenderPass.SetIndexBuffer(m.indexBuffer, gpu.IndexFormatUint16, 0, m.indexSize)
-	renderer.currentRenderPass.DrawIndexed(m.indexCount, uint32(instanceCount), 0, 0, 0)
+	rp.SetVertexBuffer(0, m.positionBuffer, 0, m.positionSize)
+	rp.SetVertexBuffer(1, m.normalBuffer, 0, m.normalSize)
+	rp.SetVertexBuffer(2, m.texCoordBuffer, 0, m.texCoordSize)
+	rp.SetVertexBuffer(3, m.instanceBuffer, 0, dataSize)
+	rp.SetIndexBuffer(m.indexBuffer, gpu.IndexFormatUint16, 0, m.indexSize)
+	rp.DrawIndexed(m.indexCount, uint32(instanceCount), 0, 0, 0)
 }
 
-func (m *Mesh) Lt(other *Mesh) bool {
-	if other == nil {
-		return false
-	}
-	return m.name < other.name
-}
-
-func (m *Mesh) Gt(other *Mesh) bool {
-	if other == nil {
-		return false
-	}
-	return m.name > other.name
-}
+func (m *Mesh) ID() uint32 { return m.id }
 
 var aabbMesh *Mesh
 

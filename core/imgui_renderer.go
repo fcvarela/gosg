@@ -81,7 +81,7 @@ func (ir *imguiRenderer) ensureBuffers(vertexBytes, indexBytes uint64) {
 	}
 }
 
-func (ir *imguiRenderer) draw(program *Program) {
+func (ir *imguiRenderer) draw(rp *RenderPass) {
 	if imguiSystem == nil {
 		return
 	}
@@ -91,8 +91,13 @@ func (ir *imguiRenderer) draw(program *Program) {
 		return
 	}
 
+	program := rp.CurrentProgram()
+	if program == nil {
+		return
+	}
+
 	ir.ensurePipeline(program, renderer.surfaceFormat)
-	renderer.currentRenderPass.SetPipeline(ir.pipeline)
+	rp.SetGPUPipeline(ir.pipeline)
 
 	listCount := drawData.CommandListCount()
 
@@ -129,8 +134,8 @@ func (ir *imguiRenderer) draw(program *Program) {
 		}
 
 		// Bind this command list's region of the buffers
-		renderer.currentRenderPass.SetVertexBuffer(0, ir.vertexBuffer, vertexOffset, vBytes)
-		renderer.currentRenderPass.SetIndexBuffer(ir.indexBuffer, gpu.IndexFormatUint16, indexOffset, iBytesAligned)
+		rp.SetVertexBuffer(0, ir.vertexBuffer, vertexOffset, vBytes)
+		rp.SetIndexBuffer(ir.indexBuffer, gpu.IndexFormatUint16, indexOffset, iBytesAligned)
 
 		var elemOffset uint32
 		for _, cmd := range cmdList.Commands {
@@ -148,7 +153,7 @@ func (ir *imguiRenderer) draw(program *Program) {
 			if cb > vpH { cb = vpH }
 			cw, ch := cr-cx, cb-cy
 			if cw > 0 && ch > 0 {
-				renderer.currentRenderPass.SetScissorRect(uint32(cx), uint32(cy), uint32(cw), uint32(ch))
+				rp.SetScissorRect(uint32(cx), uint32(cy), uint32(cw), uint32(ch))
 			}
 
 			// Bind texture
@@ -158,10 +163,10 @@ func (ir *imguiRenderer) draw(program *Program) {
 					{Binding: 0, TextureView: tex.view},
 					{Binding: 1, Sampler: tex.sampler},
 				})
-				renderer.currentRenderPass.SetBindGroup(1, bg)
+				rp.SetBindGroup(1, bg)
 			}
 
-			renderer.currentRenderPass.DrawIndexed(uint32(cmd.ElementCount), 1, elemOffset, 0, 0)
+			rp.DrawIndexed(uint32(cmd.ElementCount), 1, elemOffset, 0, 0)
 			elemOffset += uint32(cmd.ElementCount)
 		}
 

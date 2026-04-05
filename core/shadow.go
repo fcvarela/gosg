@@ -65,6 +65,7 @@ func NewShadowMap(size uint32, cascades int) *ShadowMap {
 	})
 
 	sm.texture = &Texture{
+		id:      allocateTextureID(),
 		texture: sm.depthTexture,
 		view:    sm.arrayView,
 		sampler: compSampler,
@@ -79,6 +80,7 @@ func NewShadowMap(size uint32, cascades int) *ShadowMap {
 
 		fb := &Framebuffer{colorAttachments: make(map[int]*Texture)}
 		fb.depthAttachment = &Texture{
+			id:   allocateTextureID(),
 			view: sm.layerViews[i],
 			descriptor: TextureDescriptor{
 				Width: size, Height: size,
@@ -190,22 +192,22 @@ func (s *ShadowMap) renderCascade(cascade int, light *Light, camera *Camera) {
 
 	shadowCam.constants.SetData(shadowCam.projectionMatrix, shadowCam.viewMatrix, nil)
 
-	renderer.Dispatch(&SetFramebufferCommand{shadowCam.framebuffer})
-	renderer.Dispatch(&SetViewportCommand{shadowCam.viewport})
-	renderer.Dispatch(&ClearCommand{shadowCam.clearMode, shadowCam.clearColor, shadowCam.clearDepth})
+	desc := shadowCam.MakeRenderPassDescriptor(false, true)
+	pass := renderer.BeginRenderPass(desc)
 
-	for state, nodeBucket := range camera.stateBuckets {
-		if state.Blending {
+	for pipeline, nodeBucket := range camera.pipelineBuckets {
+		if pipeline.Blending {
 			continue
 		}
 		// Bind the shadow array texture for all nodes
 		for _, n := range nodeBucket {
-			n.materialData.SetTexture("shadowTex", s.texture)
+			n.material.SetTexture("shadowTex", s.texture)
 		}
-		renderer.Dispatch(&BindStateCommand{resourceManager.State("shadow")})
-		renderer.Dispatch(&BindUniformBufferCommand{"cameraConstants", shadowCam.constants.buffer})
-		RenderBatchedNodes(shadowCam, nodeBucket)
+		pass.SetPipeline(resourceManager.Pipeline("shadow"))
+		pass.SetCameraConstants(shadowCam.constants.buffer)
+		RenderBatchedNodes(pass, shadowCam, nodeBucket)
 	}
+	pass.End()
 }
 
 // Render implements the Shadower interface

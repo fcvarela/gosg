@@ -121,8 +121,8 @@ func (d *DepthFunc) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// State describes the GPU pipeline state for rendering.
-type State struct {
+// Pipeline describes the GPU pipeline state for rendering.
+type Pipeline struct {
 	Name          string        `json:"name,omitempty"`
 	ProgramName   string        `json:"programName,omitempty"`
 	Topology      string        `json:"topology,omitempty"` // "triangles" (default), "lines", "points"
@@ -139,9 +139,9 @@ type State struct {
 	ScissorTest   bool          `json:"scissorTest,omitempty"`
 }
 
-// ParseState parses a State from JSON bytes.
-func ParseState(data []byte) (*State, error) {
-	var s State
+// ParsePipeline parses a Pipeline from JSON bytes.
+func ParsePipeline(data []byte) (*Pipeline, error) {
+	var s Pipeline
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}

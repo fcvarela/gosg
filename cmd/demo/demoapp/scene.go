@@ -99,8 +99,8 @@ func makeFXAASubscene(sourceFB *core.Framebuffer) (*core.Node, *core.Camera) {
 	screenQuadNode := core.NewNode("ScreenQuad")
 	screenQuadNode.SetCullComponent(new(core.AlwaysPassCuller))
 	screenQuadNode.SetMesh(core.NewScreenQuadMesh(windowSize.X(), windowSize.Y()))
-	screenQuadNode.SetState(core.GetResourceManager().State("fxaa"))
-	screenQuadNode.MaterialData().SetTexture("colorTexture", sourceFB.ColorAttachment(0))
+	screenQuadNode.SetPipeline(core.GetResourceManager().Pipeline("fxaa"))
+	screenQuadNode.Material().SetTexture("colorTexture", sourceFB.ColorAttachment(0))
 
 	geometryCamera.SetScene(screenQuadNode)
 	return screenQuadNode, geometryCamera

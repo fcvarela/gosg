@@ -42,8 +42,9 @@ type Node struct {
 	worldBounds           *AABB
 
 	// state management
-	state        *State
-	materialData Descriptors
+	pipeline *Pipeline
+	material Material
+	sortKey  uint64
 
 	// geometry, lighting & physics
 	mesh      *Mesh
@@ -73,56 +74,7 @@ func (a NodesByMaterial) Swap(i, j int) {
 
 // Less implements the sort.Interface interface.
 func (a NodesByMaterial) Less(i, j int) bool {
-	// we want to sort by: program, textures, bufferobjects
-	// this maps to: node.materialName, node.materialData.textures, node.materialData.bufferObjects
-
-	// sort by materialName first
-	if a[i].state.Name < a[j].state.Name {
-		return true
-	} else if a[i].state.Name > a[j].state.Name {
-		return false
-	}
-
-	// if we got here they share the same material, check program
-	if a[i].state.ProgramName < a[j].state.ProgramName {
-		return true
-	} else if a[i].state.ProgramName > a[j].state.ProgramName {
-		return false
-	}
-
-	// if we got here, they share the same program hence use the same sampler names, look for those textures
-	for textureName := range a[i].materialData.textures {
-		textureI, textureJ := a[i].materialData.textures[textureName], a[j].materialData.textures[textureName]
-		if textureI.Lt(textureJ) {
-			return true
-		} else if textureI.Gt(textureJ) {
-			return false
-		}
-	}
-
-	// if we got here, they use the same textures for the same samplers. Check mesh. Do not call this with any nodes
-	// not containing meshes
-	meshI, meshJ := a[i].mesh, a[j].mesh
-	if meshI.Lt(meshJ) {
-		return true
-	} else if meshI.Gt(meshJ) {
-		return false
-	}
-
-	/*
-		// if we got here, they use the same textures for the same samplers. Check uniform buffers
-		for uniformBufferName := range a[i].materialData.uniformBuffers {
-			uniformBufferI, uniformBufferJ := a[i].materialData.uniformBuffers[uniformBufferName], a[j].materialData.uniformBuffers[uniformBufferName]
-			if uniformBufferI.Lt(uniformBufferJ) {
-				return true
-			} else if uniformBufferI.Gt(uniformBufferJ) {
-				return false
-			}
-		}
-	*/
-
-	// if we got here, they share everything, return false (not less :))
-	return false
+	return a[i].sortKey < a[j].sortKey
 }
 
 // NodesByCameraDistanceNearToFar is used to sort nodes according to camera distance from near to far.
@@ -186,8 +138,8 @@ func NewNode(name string) *Node {
 	n.active = true
 	n.bounds = NewAABB()
 	n.worldBounds = NewAABB()
-	n.state = nil
-	n.materialData = NewDescriptors()
+	n.pipeline = nil
+	n.material = NewMaterial()
 	n.children = make([]*Node, 0)
 	n.dirtyBounds = true
 	n.dirtyTransform = true
@@ -290,19 +242,19 @@ func (n *Node) setDirtyTransform() {
 	}
 }
 
-// SetState sets the node's pipeline state
-func (n *Node) SetState(s *State) {
-	n.state = s
+// SetPipeline sets the node's pipeline
+func (n *Node) SetPipeline(s *Pipeline) {
+	n.pipeline = s
 }
 
-// State returns the node's state
-func (n *Node) State() *State {
-	return n.state
+// Pipeline returns the node's pipeline
+func (n *Node) Pipeline() *Pipeline {
+	return n.pipeline
 }
 
-// MaterialData returns the node's state
-func (n *Node) MaterialData() *Descriptors {
-	return &n.materialData
+// Material returns the node's material.
+func (n *Node) Material() *Material {
+	return &n.material
 }
 
 // Transform returns the node's transform
@@ -509,12 +461,12 @@ func (n *Node) Copy() *Node {
 	nc.dirtyBounds = true
 
 	// deep copy material data
-	nc.materialData = NewDescriptors()
-	for k, v := range n.materialData.uniforms {
-		nc.materialData.uniforms[k] = v.Copy()
+	nc.material = NewMaterial()
+	for k, v := range n.material.uniforms {
+		nc.material.uniforms[k] = v.Copy()
 	}
-	for k, v := range n.materialData.textures {
-		nc.materialData.SetTexture(k, v)
+	for k, v := range n.material.textures {
+		nc.material.SetTexture(k, v)
 	}
 
 	for _, c := range n.children {
