@@ -23,7 +23,7 @@ nodes:
       autoFrustum: true
       clearColor: [0.4, 0.6, 0.9, 1.0]
       clearMode: [color, depth]
-      clipDistance: [1.0, 250.0]
+      clipDistance: [1.0, 2.0]
       renderOrder: 0
       position: [0, 0, 50]
       input: mouseCameraInput

@@ -980,6 +980,12 @@ func (ce CommandEncoder) Finish() CommandBuffer {
 	return CommandBuffer{C.wgpuCommandEncoderFinish(ce.ref, nil)}
 }
 
+func (cb CommandBuffer) Release() {
+	if cb.ref != nil {
+		C.wgpuCommandBufferRelease(cb.ref)
+	}
+}
+
 func (ce CommandEncoder) Release() {
 	if ce.ref != nil {
 		C.wgpuCommandEncoderRelease(ce.ref)

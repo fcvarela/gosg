@@ -96,6 +96,7 @@ func (rp *RenderPass) SetCameraConstants(ubo *UniformBuffer) {
 		Size:    ubo.size,
 	}})
 	rp.encoder.SetBindGroup(0, bg)
+	bg.Release()
 }
 
 // SetMaterial creates a bind group for textures at group 1 and binds it.
@@ -133,6 +134,7 @@ func (rp *RenderPass) SetMaterial(mat *Material) {
 	if len(entries) > 0 {
 		bg := renderer.device.CreateBindGroup(rp.currentProgram.bindGroupLayouts[1], entries)
 		rp.encoder.SetBindGroup(1, bg)
+		bg.Release()
 	}
 }
 
@@ -216,7 +218,14 @@ type Renderer struct {
 	stats FrameStats
 }
 
+// Removed instanceData from Renderer — see package-level var below
+
 var renderer *Renderer
+
+// sharedInstanceData is a package-level buffer reused across all RenderBatch/AABB calls.
+// It must NOT live inside *Renderer — cgo would see an interior pointer into a struct
+// that contains Go pointers and panic.
+var sharedInstanceData [MaxInstances]InstanceData
 
 // InitRenderer creates and initializes the global renderer.
 func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) {
@@ -475,6 +484,8 @@ func (r *Renderer) Flush() {
 	r.stats.Flushes++
 	cmdBuf := r.encoder.Finish()
 	r.queue.Submit(cmdBuf)
+	cmdBuf.Release()
+	r.encoder.Release()
 	r.encoder = r.device.CreateCommandEncoder()
 }
 
@@ -482,10 +493,13 @@ func (r *Renderer) Flush() {
 func (r *Renderer) EndFrame() {
 	cmdBuf := r.encoder.Finish()
 	r.queue.Submit(cmdBuf)
+	cmdBuf.Release()
+	r.encoder.Release()
 	r.surface.Present()
 
 	r.swapChainView.Release()
 	r.swapChainView = gpu.TextureView{}
+	r.swapChainTexture.Release()
 	r.swapChainTexture = gpu.Texture{}
 }
 
@@ -640,7 +654,6 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) 
 	pass.SetCameraConstants(camera.constants.buffer)
 
 	// Collect all nodes across all buckets into a single instance array
-	var instanceData [MaxInstances]InstanceData
 	count := 0
 	for _, nodes := range materialBuckets {
 		for _, n := range nodes {
@@ -650,12 +663,12 @@ func AABBRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) 
 			center := n.worldBounds.Center()
 			size := n.worldBounds.Size()
 			transform64 := mgl64.Translate3D(center[0], center[1], center[2]).Mul4(mgl64.Scale3D(size[0], size[1], size[2]))
-			instanceData[count].ModelMatrix = Mat4DoubleToFloat(transform64)
+			sharedInstanceData[count].ModelMatrix = Mat4DoubleToFloat(transform64)
 			count++
 		}
 	}
 	if count > 0 {
-		AABBMesh().DrawInstanced(pass, count, unsafe.Pointer(&instanceData))
+		AABBMesh().DrawInstanced(pass, count, unsafe.Pointer(&sharedInstanceData))
 	}
 	pass.End()
 }
@@ -705,16 +718,15 @@ func RenderBatch(pass *RenderPass, camera *Camera, nodes []*Node) {
 		return
 	}
 
-	var instanceData [MaxInstances]InstanceData
 	for i, n := range nodes {
 		mMatrix64 := n.WorldTransform()
 		mvpMatrix64 := camera.projectionMatrix.Mul4(camera.viewMatrix.Mul4(mMatrix64))
-		instanceData[i].ModelMatrix = Mat4DoubleToFloat(mMatrix64)
-		instanceData[i].ModelViewProjectionMatrix = Mat4DoubleToFloat(mvpMatrix64)
-		instanceData[i].Custom = n.material.instanceData
+		sharedInstanceData[i].ModelMatrix = Mat4DoubleToFloat(mMatrix64)
+		sharedInstanceData[i].ModelViewProjectionMatrix = Mat4DoubleToFloat(mvpMatrix64)
+		sharedInstanceData[i].Custom = n.material.instanceData
 	}
 	pass.SetMaterial(&nodes[0].material)
-	nodes[0].mesh.DrawInstanced(pass, len(nodes), unsafe.Pointer(&instanceData))
+	nodes[0].mesh.DrawInstanced(pass, len(nodes), unsafe.Pointer(&sharedInstanceData))
 
 	renderer.stats.Batches++
 	renderer.stats.DrawCalls++

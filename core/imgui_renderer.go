@@ -164,6 +164,7 @@ func (ir *imguiRenderer) draw(rp *RenderPass) {
 					{Binding: 1, Sampler: tex.sampler},
 				})
 				rp.SetBindGroup(1, bg)
+				bg.Release()
 			}
 
 			rp.DrawIndexed(uint32(cmd.ElementCount), 1, elemOffset, 0, 0)
