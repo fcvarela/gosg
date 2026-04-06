@@ -184,22 +184,50 @@ func (s *ShadowMap) renderCascade(cascade int, light *Light, camera *Camera) {
 		mgl64.Vec3{0, 1, 0},
 	)
 
-	// Transform sphere center to light space for texel snapping
+	// Compute tight ortho bounds by intersecting cascade frustum with scene AABB in light space.
+	// This ensures the shadow map covers only the geometry, not the full camera frustum.
+	sceneBounds := camera.Scene().WorldBounds()
+	lightSceneBounds := sceneBounds.Transformed(shadowCam.viewMatrix)
+
+	// Frustum-derived bounds in light space
 	centerLight := mgl64.TransformCoordinate(center, shadowCam.viewMatrix)
+	frustLeft := centerLight[0] - radius
+	frustRight := centerLight[0] + radius
+	frustBottom := centerLight[1] - radius
+	frustTop := centerLight[1] + radius
 
-	// Snap center to texel grid (worldUnitsPerTexel is constant for a given cascade)
-	worldUnitsPerTexel := (2.0 * radius) / float64(s.size)
-	centerLight[0] = math.Floor(centerLight[0]/worldUnitsPerTexel) * worldUnitsPerTexel
-	centerLight[1] = math.Floor(centerLight[1]/worldUnitsPerTexel) * worldUnitsPerTexel
+	// Intersect XY with scene bounds in light space
+	left := math.Max(frustLeft, lightSceneBounds.min[0])
+	right := math.Min(frustRight, lightSceneBounds.max[0])
+	bottom := math.Max(frustBottom, lightSceneBounds.min[1])
+	top := math.Min(frustTop, lightSceneBounds.max[1])
 
-	// Ortho projection: X/Y from snapped center ± radius, Z covers the sphere depth.
-	// Camera is at center+lightDir*radius, sphere center at Z=-radius in view space,
-	// so sphere spans Z=[0, -2*radius]. OrthoWebGPU near/far are positive distances.
-	shadowCam.projectionMatrix = OrthoWebGPU(
-		centerLight[0]-radius, centerLight[0]+radius,
-		centerLight[1]-radius, centerLight[1]+radius,
-		0.0, 2.0*radius,
-	)
+	// If intersection is degenerate, fall back to frustum bounds
+	if left >= right || bottom >= top {
+		left = frustLeft
+		right = frustRight
+		bottom = frustBottom
+		top = frustTop
+	}
+
+	// For Z, use the scene's full depth extent in light space.
+	// Near=0 is at the shadow camera; we need to cover from the camera to the farthest scene geometry.
+	// lightSceneBounds.min[2] is the most negative Z (farthest from camera in view space).
+	zFar := math.Max(2.0*radius, -lightSceneBounds.min[2]+1.0)
+
+	// Snap to texel grid for stability (use the tighter XY extent for texel size)
+	extentX := right - left
+	extentY := top - bottom
+	extent := math.Max(extentX, extentY)
+	worldUnitsPerTexel := extent / float64(s.size)
+	if worldUnitsPerTexel > 0 {
+		left = math.Floor(left/worldUnitsPerTexel) * worldUnitsPerTexel
+		right = math.Ceil(right/worldUnitsPerTexel) * worldUnitsPerTexel
+		bottom = math.Floor(bottom/worldUnitsPerTexel) * worldUnitsPerTexel
+		top = math.Ceil(top/worldUnitsPerTexel) * worldUnitsPerTexel
+	}
+
+	shadowCam.projectionMatrix = OrthoWebGPU(left, right, bottom, top, 0.0, zFar)
 
 	vpmatrix := shadowCam.projectionMatrix.Mul4(shadowCam.viewMatrix)
 	biasvpmatrix := mgl64.Mat4FromCols(

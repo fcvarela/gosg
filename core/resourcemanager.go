@@ -2,6 +2,7 @@ package core
 
 import (
 	"log"
+	"strings"
 
 	"github.com/golang/glog"
 )
@@ -9,10 +10,12 @@ import (
 // ResourceSystem is an interface which wraps all resource management logic.
 type ResourceSystem interface {
 	Model(string) []byte
+	ModelPath(string) string
 	Texture(string) []byte
 	Program(string) []byte
 	Pipeline(string) []byte
 	ProgramData(string) []byte
+	Scene(string) []byte
 }
 
 // ResourceManager wraps a resourcesystem and contains configuration about the location of each resource type.
@@ -53,8 +56,12 @@ func (r *ResourceManager) SetSystem(s ResourceSystem) {
 // Model returns a scenegraph node.
 func (r *ResourceManager) Model(name string) *Node {
 	if r.models[name] == nil {
-		resource := r.system.Model(name)
-		r.models[name] = LoadModel(name, resource)
+		if strings.HasSuffix(name, ".gltf") || strings.HasSuffix(name, ".glb") {
+			r.models[name] = LoadGLTF(name, r.system)
+		} else {
+			resource := r.system.Model(name)
+			r.models[name] = LoadModel(name, resource)
+		}
 	}
 	return r.models[name].Copy()
 }
@@ -85,4 +92,10 @@ func (r *ResourceManager) Pipeline(name string) *Pipeline {
 // ProgramData returns source file contents for a given program or subprogram
 func (r *ResourceManager) ProgramData(name string) []byte {
 	return r.system.ProgramData(name)
+}
+
+// Scene loads and returns a Scene from a YAML file.
+func (r *ResourceManager) Scene(name string) *Scene {
+	data := r.system.Scene(name)
+	return LoadSceneFromYAML(data)
 }

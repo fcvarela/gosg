@@ -60,10 +60,14 @@ func New() *ResourceSystem {
 	paths["pipelines"] = []string{filepath.Join(bp, "pipelines"), filepath.Join(ubp, "pipelines")}
 	paths["models"] = []string{filepath.Join(bp, "models"), filepath.Join(ubp, "models")}
 	paths["textures"] = []string{filepath.Join(bp, "textures"), filepath.Join(ubp, "textures")}
+	paths["scenes"] = []string{filepath.Join(bp, "scenes"), filepath.Join(ubp, "scenes")}
 
 	r := ResourceSystem{paths: paths}
 
-	for _, p := range paths {
+	// Validate required paths exist (scenes is optional)
+	requiredPaths := []string{"programs", "pipelines", "models", "textures"}
+	for _, name := range requiredPaths {
+		p := paths[name]
 		if _, err := os.Stat(p[0]); os.IsNotExist(err) {
 			glog.Fatalf("No such file or directory: %v\n", p[0])
 		}
@@ -99,6 +103,16 @@ func (r *ResourceSystem) Model(filename string) []byte {
 	return r.loadResource(filename, "models")
 }
 
+// ModelPath returns the resolved filesystem path to a model file.
+func (r *ResourceSystem) ModelPath(filename string) string {
+	// Try user path first, then base path
+	fullpath := filepath.Join(r.paths["models"][1], filename)
+	if _, err := os.Stat(fullpath); err == nil {
+		return fullpath
+	}
+	return filepath.Join(r.paths["models"][0], filename)
+}
+
 // Texture implements the core.ResourceSystem interface
 func (r *ResourceSystem) Texture(filename string) []byte {
 	return r.loadResource(filename, "textures")
@@ -119,4 +133,9 @@ func (r *ResourceSystem) Program(name string) []byte {
 // ProgramData implements the core.ResourceSystem interface
 func (r *ResourceSystem) ProgramData(name string) []byte {
 	return r.loadResource(name, "programs")
+}
+
+// Scene implements the core.ResourceSystem interface
+func (r *ResourceSystem) Scene(name string) []byte {
+	return r.loadResource(name, "scenes")
 }

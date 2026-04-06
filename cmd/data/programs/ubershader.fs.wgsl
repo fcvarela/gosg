@@ -138,12 +138,6 @@ fn main(in: FragmentInput) -> @location(0) vec4f {
     let NdotV = dot(N, V);
     let NdotV_clamped = max(NdotV, 0.0000000001);
 
-    // Hemisphere ambient: blend sky and ground color based on world-space normal
-    let skyColor = vec3f(0.4, 0.5, 0.7);
-    let groundColor = vec3f(0.15, 0.1, 0.05);
-    let hemisphereBlend = 0.5 + 0.5 * N.y;
-    let ambient = mix(groundColor, skyColor, hemisphereBlend) * albedo.rgb * (1.0 - metalness * 0.5);
-
     let lc = i32(camera.lightCount[0]);
     for (var i: i32 = 0; i < lc; i++) {
         // light direction and half vector
@@ -170,6 +164,6 @@ fn main(in: FragmentInput) -> @location(0) vec4f {
     }
 
     // Add ambient after direct lighting (not affected by shadow)
-    color = vec4f(color.rgb + ambient, albedo.a);
+    color = vec4f(color.rgb, albedo.a);
     return color;
 }

@@ -1,0 +1,55 @@
+name: Demo1
+
+nodes:
+  - name: GeometryRoot
+    children:
+      - name: F16
+        model: f16.model
+
+      - name: Light1
+        position: [100, 0, 100]
+        light:
+          color: [1.0, 1.0, 1.0]
+          shadowBias: 0.01
+          shadow:
+            size: 2048
+            cascades: 3
+
+    camera:
+      name: GeometryPassCamera
+      projection: perspective
+      fov: 60
+      autoReshape: true
+      autoFrustum: true
+      clearColor: [0.4, 0.6, 0.9, 1.0]
+      clearMode: [color, depth]
+      clipDistance: [1.0, 250.0]
+      renderOrder: 0
+      position: [0, 0, 50]
+      input: mouseCameraInput
+      technique: default
+      framebuffer:
+        color0:
+          format: rgba16f
+          filter: linear
+          wrap: clampEdge
+        depth:
+          format: depth32f
+          filter: nearest
+          wrap: clampEdge
+
+  - name: ScreenQuad
+    cull: alwaysPass
+    pipeline: fxaa
+    screenQuad: true
+    textures:
+      colorTexture: "$GeometryPassCamera.framebuffer.color0"
+
+    camera:
+      name: FXAACamera
+      projection: orthographic
+      clipDistance: [0, 1]
+      clearColor: [0.1, 0, 0, 1]
+      clearMode: [color, depth]
+      renderOrder: 1
+      technique: postprocess

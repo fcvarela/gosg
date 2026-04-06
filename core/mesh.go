@@ -27,6 +27,7 @@ type Mesh struct {
 	bounds         *AABB
 	primitiveType  PrimitiveType
 	indexCount     uint32
+	indexFormat    gpu.IndexFormat
 	positionBuffer gpu.Buffer
 	normalBuffer   gpu.Buffer
 	texCoordBuffer gpu.Buffer
@@ -41,8 +42,9 @@ type Mesh struct {
 // NewMesh creates a new empty mesh.
 func NewMesh() *Mesh {
 	m := &Mesh{
-		id:     atomic.AddUint32(&nextMeshID, 1),
-		bounds: NewAABB(),
+		id:          atomic.AddUint32(&nextMeshID, 1),
+		bounds:      NewAABB(),
+		indexFormat: gpu.IndexFormatUint16,
 	}
 	// Pre-allocate instance buffer for instanced drawing
 	if renderer != nil {
@@ -88,6 +90,7 @@ func (m *Mesh) SetTextureCoordinates(texcoords []float32) {
 
 func (m *Mesh) SetIndices(indices []uint16) {
 	m.indexCount = uint32(len(indices))
+	m.indexFormat = gpu.IndexFormatUint16
 	rawSize := uint64(len(indices) * 2)
 	// wgpu requires buffer sizes and copy sizes aligned to 4 bytes
 	m.indexSize = (rawSize + 3) &^ 3
@@ -98,11 +101,21 @@ func (m *Mesh) SetIndices(indices []uint16) {
 	renderer.queue.WriteBuffer(m.indexBuffer, 0, unsafe.Pointer(&padded[0]), m.indexSize)
 }
 
+func (m *Mesh) SetIndices32(indices []uint32) {
+	m.indexCount = uint32(len(indices))
+	m.indexFormat = gpu.IndexFormatUint32
+	rawSize := uint64(len(indices) * 4)
+	// uint32 indices are already 4-byte aligned
+	m.indexSize = rawSize
+	m.indexBuffer = renderer.device.CreateBuffer(m.indexSize, gpu.BufferUsageIndex|gpu.BufferUsageCopyDst)
+	renderer.queue.WriteBuffer(m.indexBuffer, 0, unsafe.Pointer(&indices[0]), m.indexSize)
+}
+
 func (m *Mesh) Draw(rp *RenderPass) {
 	rp.SetVertexBuffer(0, m.positionBuffer, 0, m.positionSize)
 	rp.SetVertexBuffer(1, m.normalBuffer, 0, m.normalSize)
 	rp.SetVertexBuffer(2, m.texCoordBuffer, 0, m.texCoordSize)
-	rp.SetIndexBuffer(m.indexBuffer, gpu.IndexFormatUint16, 0, m.indexSize)
+	rp.SetIndexBuffer(m.indexBuffer, m.indexFormat, 0, m.indexSize)
 	rp.DrawIndexed(m.indexCount, 1, 0, 0, 0)
 }
 
@@ -113,7 +126,7 @@ func (m *Mesh) DrawInstanced(rp *RenderPass, instanceCount int, instanceData uns
 	rp.SetVertexBuffer(1, m.normalBuffer, 0, m.normalSize)
 	rp.SetVertexBuffer(2, m.texCoordBuffer, 0, m.texCoordSize)
 	rp.SetVertexBuffer(3, m.instanceBuffer, 0, dataSize)
-	rp.SetIndexBuffer(m.indexBuffer, gpu.IndexFormatUint16, 0, m.indexSize)
+	rp.SetIndexBuffer(m.indexBuffer, m.indexFormat, 0, m.indexSize)
 	rp.DrawIndexed(m.indexCount, uint32(instanceCount), 0, 0, 0)
 }
 

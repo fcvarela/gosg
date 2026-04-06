@@ -33,6 +33,16 @@ func main() {
 			outputDir = os.Args[3]
 		}
 		doUnpack(os.Args[2], outputDir)
+	case "togltf":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "Usage: modeltool togltf <file.model> [output_dir]")
+			os.Exit(1)
+		}
+		outputDir := ""
+		if len(os.Args) >= 4 {
+			outputDir = os.Args[3]
+		}
+		doToGLTF(os.Args[2], outputDir)
 	default:
 		usage()
 		os.Exit(1)
@@ -45,6 +55,7 @@ func usage() {
 Usage:
   modeltool pack <manifest.yaml>     Pack meshes into a .model file
   modeltool unpack <file.model> [dir] Unpack a .model file into binary files
+  modeltool togltf <file.model> [dir] Convert a .model file to .glb (glTF Binary)
 
 Manifest format (YAML):
   output: mymodel.model

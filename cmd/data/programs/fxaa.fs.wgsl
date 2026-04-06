@@ -73,7 +73,8 @@ fn fxaa(tcoords: vec2f) -> vec3f {
 
 @fragment
 fn main(in: FragmentInput) -> @location(0) vec4f {
-    var color: vec3f = fxaa(in.tcoords0.xy);
+    var color: vec3f = textureSample(colorTexture, colorSampler, in.tcoords0.xy).xyz;
+    //var color: vec3f = fxaa(in.tcoords0.xy);
     color = tonemapUncharted2(color);
     color = pow(color, vec3f(1.0 / 2.2));
     return vec4f(color, 1.0);
