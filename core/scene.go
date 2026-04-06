@@ -113,11 +113,16 @@ func (s *Scene) update(dt float64) {
 func (s *Scene) cull() {
 	for _, c := range s.cameraList {
 		if c.autoFrustum {
-			// compute scene bounds center +- radius to camera distance
-			var dist = c.node.WorldPosition().Sub(c.scene.worldBounds.Center()).Len()
-			var radius = c.scene.worldBounds.Size().Len() / 2.0
-			var min, max = math.Max(1.0, dist-radius), dist + radius
-			c.SetClipDistance(mgl64.Vec2{min, max})
+			// Compute clip distances from scene bounds in view space,
+			// not Euclidean distance, so they stay correct as the camera rotates.
+			viewBounds := c.scene.worldBounds.Transformed(c.viewMatrix)
+			// In view space, camera looks down -Z: closest objects have max Z, farthest have min Z
+			near := math.Max(1.0, -viewBounds.max[2])
+			far := -viewBounds.min[2]
+			if far <= near {
+				far = near + 1.0
+			}
+			c.SetClipDistance(mgl64.Vec2{near, far})
 		}
 		c.Reshape(windowManager.WindowSize())
 	}

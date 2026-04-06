@@ -10,7 +10,7 @@ nodes:
         position: [100, 0, 100]
         light:
           color: [1.0, 1.0, 1.0]
-          shadowBias: 0.01
+          shadowBias: 0.000
           shadow:
             size: 2048
             cascades: 3
