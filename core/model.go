@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-
-	"github.com/golang/glog"
 )
 
 // modelMesh holds the raw data for a single mesh within a model.
@@ -52,6 +50,9 @@ func parseModel(data []byte) (*model, error) {
 			}
 			offset += n
 
+			if offset+int(length) > len(data) {
+				return nil, fmt.Errorf("mesh data extends beyond buffer at offset %d", offset)
+			}
 			meshData := data[offset : offset+int(length)]
 			offset += int(length)
 
@@ -90,6 +91,9 @@ func parseMesh(data []byte) (modelMesh, error) {
 				return m, fmt.Errorf("bad length varint")
 			}
 			offset += n
+			if offset+int(length) > len(data) {
+				return m, fmt.Errorf("field %d data extends beyond buffer at offset %d", fieldNum, offset)
+			}
 			value := data[offset : offset+int(length)]
 			offset += int(length)
 
@@ -171,17 +175,21 @@ func skipField(data []byte, offset int, wireType uint64) int {
 }
 
 // LoadModel parses model data from a raw resource and returns a node.
-func LoadModel(name string, res []byte) *Node {
+func LoadModel(name string, res []byte) (*Node, error) {
 	m, err := parseModel(res)
 	if err != nil {
-		glog.Fatalf("Failed to parse model %s: %v", name, err)
+		return nil, fmt.Errorf("failed to parse model %s: %w", name, err)
 	}
 
 	basename := filepath.Base(name)
 	parentNode := NewNode(basename)
 	for i := range m.Meshes {
 		node := NewNode(basename + fmt.Sprintf("-%d", i))
-		node.pipeline = resourceManager.Pipeline(m.Meshes[i].State)
+		pipeline, err := resourceManager.Pipeline(m.Meshes[i].State)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load pipeline for model %s: %w", name, err)
+		}
+		node.pipeline = pipeline
 
 		textureDescriptor := TextureDescriptor{
 			Mipmaps:  true,
@@ -214,7 +222,7 @@ func LoadModel(name string, res []byte) *Node {
 		parentNode.AddChild(node)
 	}
 
-	return parentNode
+	return parentNode, nil
 }
 
 func bytesToFloat(b []byte) []float32 {

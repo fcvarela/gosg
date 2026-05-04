@@ -2,10 +2,26 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/fcvarela/gosg/gpu"
 	"github.com/golang/glog"
 )
+
+func unmarshalEnumJSON(b []byte, m map[string]int, defaultVal int) (int, error) {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		if v, ok := m[s]; ok {
+			return v, nil
+		}
+		return defaultVal, fmt.Errorf("unknown enum value: %s", s)
+	}
+	var i int
+	if err := json.Unmarshal(b, &i); err != nil {
+		return defaultVal, fmt.Errorf("failed to unmarshal enum: %w", err)
+	}
+	return i, nil
+}
 
 // CullFace specifies which face to cull.
 type CullFace int
@@ -21,19 +37,13 @@ var cullFaceMap = map[string]CullFace{
 }
 
 func (c *CullFace) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err == nil {
-		if v, ok := cullFaceMap[s]; ok {
-			*c = v
-			return nil
-		}
+	v, err := unmarshalEnumJSON(b, map[string]int{
+		"CULL_BACK": int(CullBack), "CULL_FRONT": int(CullFront), "CULL_BOTH": int(CullBoth),
+	}, int(CullBack))
+	if err != nil {
+		return err
 	}
-	var i int
-	if err := json.Unmarshal(b, &i); err == nil {
-		*c = CullFace(i)
-		return nil
-	}
-	*c = CullBack
+	*c = CullFace(v)
 	return nil
 }
 
@@ -51,19 +61,13 @@ var blendModeMap = map[string]BlendMode{
 }
 
 func (b *BlendMode) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
-		if v, ok := blendModeMap[s]; ok {
-			*b = v
-			return nil
-		}
+	v, err := unmarshalEnumJSON(data, map[string]int{
+		"BLEND_SRC_ALPHA": int(BlendSrcAlpha), "BLEND_ONE_MINUS_SRC_ALPHA": int(BlendOneMinusSrcAlpha), "BLEND_ONE": int(BlendOne),
+	}, int(BlendSrcAlpha))
+	if err != nil {
+		return err
 	}
-	var i int
-	if err := json.Unmarshal(data, &i); err == nil {
-		*b = BlendMode(i)
-		return nil
-	}
-	*b = BlendSrcAlpha
+	*b = BlendMode(v)
 	return nil
 }
 
@@ -80,19 +84,13 @@ var blendEqMap = map[string]BlendEquation{
 }
 
 func (e *BlendEquation) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
-		if v, ok := blendEqMap[s]; ok {
-			*e = v
-			return nil
-		}
+	v, err := unmarshalEnumJSON(data, map[string]int{
+		"BLEND_FUNC_ADD": int(BlendFuncAdd), "BLEND_FUNC_MAX": int(BlendFuncMax),
+	}, int(BlendFuncAdd))
+	if err != nil {
+		return err
 	}
-	var i int
-	if err := json.Unmarshal(data, &i); err == nil {
-		*e = BlendEquation(i)
-		return nil
-	}
-	*e = BlendFuncAdd
+	*e = BlendEquation(v)
 	return nil
 }
 
@@ -110,19 +108,13 @@ var depthFuncMap = map[string]DepthFunc{
 }
 
 func (d *DepthFunc) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
-		if v, ok := depthFuncMap[s]; ok {
-			*d = v
-			return nil
-		}
+	v, err := unmarshalEnumJSON(data, map[string]int{
+		"DEPTH_LESS_EQUAL": int(DepthLessEqual), "DEPTH_LESS": int(DepthLess), "DEPTH_EQUAL": int(DepthEqual),
+	}, int(DepthLessEqual))
+	if err != nil {
+		return err
 	}
-	var i int
-	if err := json.Unmarshal(data, &i); err == nil {
-		*d = DepthFunc(i)
-		return nil
-	}
-	*d = DepthLessEqual
+	*d = DepthFunc(v)
 	return nil
 }
 
@@ -180,6 +172,13 @@ func newPipelineCache() *pipelineCache {
 	return &pipelineCache{
 		cache: make(map[pipelineKey]gpu.RenderPipeline),
 	}
+}
+
+func (pc *pipelineCache) release() {
+	for _, p := range pc.cache {
+		p.Release()
+	}
+	pc.cache = make(map[pipelineKey]gpu.RenderPipeline)
 }
 
 func (pc *pipelineCache) getOrCreate(p *Pipeline, program *Program, colorFormats []gpu.TextureFormat, depthFormat gpu.TextureFormat) gpu.RenderPipeline {

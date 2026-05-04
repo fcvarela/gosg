@@ -6,6 +6,7 @@ import (
 	"github.com/fcvarela/gosg/gpu"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
+	"github.com/golang/glog"
 )
 
 // Shadower is an interface which wraps logic to implement shadowing of a light
@@ -243,6 +244,16 @@ func (s *ShadowMap) renderCascade(cascade int, light *Light, camera *Camera) {
 
 	desc := shadowCam.MakeRenderPassDescriptor(false, true)
 	pass := renderer.BeginRenderPass(desc)
+	if pass == nil {
+		return
+	}
+
+	shadowPipeline, err := resourceManager.Pipeline("shadow")
+	if err != nil {
+		glog.Warningf("failed to load shadow pipeline: %v", err)
+		pass.End()
+		return
+	}
 
 	for pipeline, nodeBucket := range camera.pipelineBuckets {
 		if pipeline.Blending {
@@ -252,7 +263,7 @@ func (s *ShadowMap) renderCascade(cascade int, light *Light, camera *Camera) {
 		for _, n := range nodeBucket {
 			n.material.SetTexture("shadowTex", s.texture)
 		}
-		pass.SetPipeline(resourceManager.Pipeline("shadow"))
+		pass.SetPipeline(shadowPipeline)
 		pass.SetCameraConstants(shadowCam.constants.buffer)
 		RenderBatchedNodes(pass, shadowCam, nodeBucket)
 	}

@@ -8,6 +8,7 @@ package core
 import "C"
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/go-gl/mathgl/mgl32"
@@ -37,14 +38,23 @@ type WindowManager struct {
 
 var (
 	windowManager *WindowManager
+	windowInitErr error
 )
 
 func init() {
 	windowManager = &WindowManager{}
+}
 
-	if C.SDL_Init(C.SDL_INIT_VIDEO|C.SDL_INIT_EVENTS) == false {
-		glog.Fatalf("SDL_Init failed: %s", C.GoString(C.SDL_GetError()))
+// InitWindowManager initializes SDL. Call before using WindowManager.
+func InitWindowManager() error {
+	if windowInitErr != nil {
+		return windowInitErr
 	}
+	if C.SDL_Init(C.SDL_INIT_VIDEO|C.SDL_INIT_EVENTS) == false {
+		windowInitErr = fmt.Errorf("SDL_Init failed: %s", C.GoString(C.SDL_GetError()))
+		return windowInitErr
+	}
+	return nil
 }
 
 // GetWindowManager returns the global WindowManager.
@@ -58,7 +68,7 @@ func (w *WindowManager) SetWindowConfig(cfg WindowConfig) {
 }
 
 // MakeWindow creates the window using the previously passed config.
-func (w *WindowManager) MakeWindow() {
+func (w *WindowManager) MakeWindow() error {
 	glog.Info("Creating SDL3 window")
 
 	flags := C.SDL_WINDOW_METAL | C.SDL_WINDOW_HIGH_PIXEL_DENSITY
@@ -80,7 +90,7 @@ func (w *WindowManager) MakeWindow() {
 		C.Uint64(flags),
 	)
 	if w.window == nil {
-		glog.Fatalf("SDL_CreateWindow failed: %s", C.GoString(C.SDL_GetError()))
+		return fmt.Errorf("SDL_CreateWindow failed: %s", C.GoString(C.SDL_GetError()))
 	}
 
 	// Hide cursor and enable relative mouse mode
@@ -89,7 +99,7 @@ func (w *WindowManager) MakeWindow() {
 	// Create Metal view for wgpu surface
 	w.metalView = C.SDL_Metal_CreateView(w.window)
 	if w.metalView == nil {
-		glog.Fatalf("SDL_Metal_CreateView failed: %s", C.GoString(C.SDL_GetError()))
+		return fmt.Errorf("SDL_Metal_CreateView failed: %s", C.GoString(C.SDL_GetError()))
 	}
 
 	// In fullscreen mode, pump events to let macOS finish the fullscreen
@@ -112,7 +122,7 @@ func (w *WindowManager) MakeWindow() {
 		w.cfg.Height = int(pointH)
 	}
 
-	InitRenderer(w.GetMetalLayer(), uint32(w.pixelWidth), uint32(w.pixelHeight))
+	return InitRenderer(w.GetMetalLayer(), uint32(w.pixelWidth), uint32(w.pixelHeight))
 }
 
 // GetMetalLayer returns the CAMetalLayer pointer for wgpu surface creation.
@@ -180,6 +190,9 @@ func (w *WindowManager) CursorPosition() (float64, float64) {
 
 func (w *WindowManager) closeWindow() {
 	glog.Info("Stopping")
+	if renderer != nil {
+		renderer.Shutdown()
+	}
 	if w.metalView != nil {
 		C.SDL_Metal_DestroyView(w.metalView)
 	}

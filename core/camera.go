@@ -1,13 +1,11 @@
 package core
 
 import (
-	"runtime"
 	"unsafe"
 
 	"github.com/fcvarela/gosg/gpu"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
-	"github.com/golang/glog"
 )
 
 // ProjectionType is used to express projection types (ie: perspective, orthographic).
@@ -21,7 +19,7 @@ const (
 	// ClearColor is used to signal whether a framebuffer's color buffer should be cleared.
 	ClearColor ClearMode = 1 << 0
 
-	// ClearDepth is used to signal whether a framebuffer's color buffer should be cleared.
+	// ClearDepth is used to signal whether a framebuffer's depth buffer should be cleared.
 	ClearDepth ClearMode = 1 << 1
 )
 
@@ -85,15 +83,6 @@ func (a CamerasByRenderOrder) Less(i, j int) bool {
 	return a[i].renderOrder < a[j].renderOrder
 }
 
-func deleteCamera(c *Camera) {
-	glog.Info("Camera finalizer start: ", c.name)
-
-	c.node = nil
-	c.scene = nil
-
-	glog.Info("Camera finalizer finish: ", c.name)
-}
-
 // NewCamera creates and returns a Camera with the given name and projection type.
 func NewCamera(name string, projType ProjectionType) *Camera {
 	cam := Camera{}
@@ -109,7 +98,6 @@ func NewCamera(name string, projType ProjectionType) *Camera {
 	cam.pipelineBuckets = make(map[*Pipeline][]*Node)
 	cam.visibleOpaqueNodes = make([]*Node, 0)
 
-	runtime.SetFinalizer(&cam, deleteCamera)
 	return &cam
 }
 

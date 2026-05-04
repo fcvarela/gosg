@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
+	"github.com/golang/glog"
 )
 
 // WindowFlags holds a set of properties for window layout.
@@ -181,7 +182,16 @@ func IMGUIRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node)
 		camera.clearMode&ClearDepth != 0,
 	)
 	pass := renderer.BeginRenderPass(desc)
-	pass.SetPipeline(resourceManager.Pipeline("imgui"))
+	if pass == nil {
+		return
+	}
+	imguiPipeline, err := resourceManager.Pipeline("imgui")
+	if err != nil {
+		glog.Warningf("failed to load imgui pipeline: %v", err)
+		pass.End()
+		return
+	}
+	pass.SetPipeline(imguiPipeline)
 	pass.SetCameraConstants(camera.constants.buffer)
 	imgui.draw(pass)
 	pass.End()

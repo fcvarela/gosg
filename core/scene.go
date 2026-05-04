@@ -2,11 +2,9 @@ package core
 
 import (
 	"math"
-	"runtime"
 	"sort"
 
 	"github.com/go-gl/mathgl/mgl64"
-	"github.com/golang/glog"
 )
 
 // Scene represents a scenegraph and contains information about how it should be composed with other scenes on
@@ -25,15 +23,6 @@ type Scene struct {
 	lights []*Light
 }
 
-func deleteScene(s *Scene) {
-	glog.Info("Scene finalizer started: ", s.name)
-
-	s.root.RemoveChildren()
-	s.root = nil
-
-	glog.Info("Scene finalizer finished: ", s.name)
-}
-
 // NewScene returns a new scene.
 func NewScene(name string) *Scene {
 	s := Scene{}
@@ -43,8 +32,6 @@ func NewScene(name string) *Scene {
 	s.cameraList = make([]*Camera, 0)
 	s.cameraMap = make(map[string]int)
 	s.lights = make([]*Light, 0)
-
-	runtime.SetFinalizer(&s, deleteScene)
 
 	return &s
 }
@@ -150,7 +137,7 @@ func (s *Scene) cull() {
 			}
 			sort.Sort(NodesByMaterial(c.pipelineBuckets[bk]))
 		}
-		sort.Sort(NodesByCameraDistanceNearToFar{c.visibleOpaqueNodes, c.node})
+		sort.Sort(NodesByCameraDistanceNearToFar{Nodes: c.visibleOpaqueNodes, RefNode: c.node})
 	}
 }
 

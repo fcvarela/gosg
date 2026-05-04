@@ -1,10 +1,7 @@
 package core
 
 import (
-	"runtime"
-
 	"github.com/go-gl/mathgl/mgl64"
-	"github.com/golang/glog"
 )
 
 // NodeCommand is an interface which wraps logic for running a command against a node.
@@ -43,7 +40,7 @@ type Node struct {
 
 	// state management
 	pipeline *Pipeline
-	material Material
+	material *Material
 	sortKey  uint64
 
 	// geometry, lighting & physics
@@ -79,8 +76,12 @@ func (a NodesByMaterial) Less(i, j int) bool {
 
 // NodesByCameraDistanceNearToFar is used to sort nodes according to camera distance from near to far.
 type NodesByCameraDistanceNearToFar struct {
-	Nodes   []*Node
-	RefNode *Node
+	Nodes      []*Node
+	RefNode    *Node
+	refPos     mgl64.Vec3
+	computed   bool
+	nodePos    []mgl64.Vec3
+	nodeDist   []float64
 }
 
 // Len implements the sort.Interface interface.
@@ -91,17 +92,23 @@ func (a NodesByCameraDistanceNearToFar) Len() int {
 // Swap implements the sort.Interface interface.
 func (a NodesByCameraDistanceNearToFar) Swap(i, j int) {
 	a.Nodes[i], a.Nodes[j] = a.Nodes[j], a.Nodes[i]
+	a.nodePos[i], a.nodePos[j] = a.nodePos[j], a.nodePos[i]
+	a.nodeDist[i], a.nodeDist[j] = a.nodeDist[j], a.nodeDist[i]
 }
 
 // Less implements the sort.Interface interface.
 func (a NodesByCameraDistanceNearToFar) Less(i, j int) bool {
-	pos1 := a.Nodes[i].WorldPosition()
-	pos2 := a.Nodes[j].WorldPosition()
-
-	dist1 := pos1.Sub(a.RefNode.WorldPosition()).Len()
-	dist2 := pos2.Sub(a.RefNode.WorldPosition()).Len()
-
-	return dist1 < dist2
+	if !a.computed {
+		a.refPos = a.RefNode.WorldPosition()
+		a.nodePos = make([]mgl64.Vec3, len(a.Nodes))
+		a.nodeDist = make([]float64, len(a.Nodes))
+		for i, n := range a.Nodes {
+			a.nodePos[i] = n.WorldPosition()
+			a.nodeDist[i] = a.nodePos[i].Sub(a.refPos).Len()
+		}
+		a.computed = true
+	}
+	return a.nodeDist[i] < a.nodeDist[j]
 }
 
 // NodesByName is used to sort nodes by alphabetic name order.
@@ -124,34 +131,26 @@ func (a NodesByName) Less(i, j int) bool {
 	return a.Nodes[i].name < a.Nodes[j].name
 }
 
-func deleteNode(n *Node) {
-	glog.Info("Node cleaning up: ", n.name)
-}
-
 // NewNode returns a new node named `name`.
 func NewNode(name string) *Node {
-	n := Node{}
-	n.name = name
-	n.transform = mgl64.Ident4()
-	n.worldTransform = n.transform
+	mat := NewMaterial()
+	n := Node{
+		name:           name,
+		transform:      mgl64.Ident4(),
+		worldTransform: mgl64.Ident4(),
+		active:         true,
+		bounds:         NewAABB(),
+		worldBounds:    NewAABB(),
+		material:       &mat,
+		children:       make([]*Node, 0),
+		dirtyBounds:    true,
+		dirtyTransform: true,
+
+		lightExtractor:   new(DefaultLightExtractor),
+		cullComponent:    new(DefaultCuller),
+		physicsComponent: new(DefaultPhysicsComponent),
+	}
 	n.inverseWorldTransform = n.transform.Inv()
-	n.active = true
-	n.bounds = NewAABB()
-	n.worldBounds = NewAABB()
-	n.pipeline = nil
-	n.material = NewMaterial()
-	n.children = make([]*Node, 0)
-	n.dirtyBounds = true
-	n.dirtyTransform = true
-
-	// user should override
-	n.lightExtractor = new(DefaultLightExtractor)
-	n.updateComponent = nil
-	n.cullComponent = new(DefaultCuller)
-	n.inputComponent = nil
-	n.physicsComponent = new(DefaultPhysicsComponent)
-
-	runtime.SetFinalizer(&n, deleteNode)
 
 	return &n
 }
@@ -254,7 +253,7 @@ func (n *Node) Pipeline() *Pipeline {
 
 // Material returns the node's material.
 func (n *Node) Material() *Material {
-	return &n.material
+	return n.material
 }
 
 // Transform returns the node's transform
@@ -425,16 +424,17 @@ func (n *Node) AddChild(c *Node) {
 	n.setDirtyBounds()
 }
 
-// RemoveChild removes a node's child.
-func (n *Node) RemoveChild(c *Node) {
+// RemoveChild removes a node's child. Returns true if the child was found and removed.
+func (n *Node) RemoveChild(c *Node) bool {
 	for i := range n.children {
 		if n.children[i] == c {
 			n.setDirtyBounds()
 			n.children = append(n.children[:i], n.children[i+1:]...)
 			c.parent = nil
-			break
+			return true
 		}
 	}
+	return false
 }
 
 // RemoveChildren removes all of a node's children.
@@ -452,22 +452,39 @@ func (n *Node) RemoveChildren() {
 
 // Copy deep copies a node.
 func (n *Node) Copy() *Node {
-	nc := *n
-	nc.parent = nil
-	nc.children = make([]*Node, 0)
-	nc.bounds = NewAABB()
-	nc.worldBounds = NewAABB()
-	nc.dirtyTransform = true
-	nc.dirtyBounds = true
+	mat := NewMaterial()
+	nc := Node{
+		name:           n.name,
+		active:         n.active,
+		transform:      n.transform,
+		worldTransform: n.worldTransform,
+		inverseWorldTransform: n.inverseWorldTransform,
+		pipeline:       n.pipeline,
+		material:       &mat,
+		mesh:           n.mesh,
+		light:          n.light,
+		rigidBody:      n.rigidBody,
+		lightExtractor: n.lightExtractor,
+		updateComponent: n.updateComponent,
+		cullComponent:  n.cullComponent,
+		inputComponent: n.inputComponent,
+		physicsComponent: n.physicsComponent,
+		boundsCallback: n.boundsCallback,
+		bounds:         NewAABB(),
+		worldBounds:    NewAABB(),
+		dirtyTransform: true,
+		dirtyBounds:    true,
+		children:       make([]*Node, 0),
+	}
 
 	// deep copy material data
-	nc.material = NewMaterial()
 	for k, v := range n.material.uniforms {
 		nc.material.uniforms[k] = v.Copy()
 	}
 	for k, v := range n.material.textures {
 		nc.material.SetTexture(k, v)
 	}
+	nc.material.instanceData = n.material.instanceData
 
 	for _, c := range n.children {
 		nc.AddChild(c.Copy())

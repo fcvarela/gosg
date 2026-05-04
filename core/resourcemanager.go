@@ -1,10 +1,9 @@
 package core
 
 import (
-	"log"
+	"errors"
+	"fmt"
 	"strings"
-
-	"github.com/golang/glog"
 )
 
 // ResourceSystem is an interface which wraps all resource management logic.
@@ -46,24 +45,31 @@ func GetResourceManager() *ResourceManager {
 }
 
 // SetSystem sets the resource manager's resource system
-func (r *ResourceManager) SetSystem(s ResourceSystem) {
+func (r *ResourceManager) SetSystem(s ResourceSystem) error {
 	if r.system != nil {
-		log.Fatal("Can't replace previously registered resource system.")
+		return errors.New("can't replace previously registered resource system")
 	}
 	r.system = s
+	return nil
 }
 
 // Model returns a scenegraph node.
-func (r *ResourceManager) Model(name string) *Node {
+func (r *ResourceManager) Model(name string) (*Node, error) {
 	if r.models[name] == nil {
+		var node *Node
+		var err error
 		if strings.HasSuffix(name, ".gltf") || strings.HasSuffix(name, ".glb") {
-			r.models[name] = LoadGLTF(name, r.system)
+			node, err = LoadGLTF(name, r.system)
 		} else {
 			resource := r.system.Model(name)
-			r.models[name] = LoadModel(name, resource)
+			node, err = LoadModel(name, resource)
 		}
+		if err != nil {
+			return nil, err
+		}
+		r.models[name] = node
 	}
-	return r.models[name].Copy()
+	return r.models[name].Copy(), nil
 }
 
 // Program returns a GPU program.
@@ -76,17 +82,17 @@ func (r *ResourceManager) Program(name string) *Program {
 }
 
 // Pipeline returns a Pipeline parsed from JSON.
-func (r *ResourceManager) Pipeline(name string) *Pipeline {
+func (r *ResourceManager) Pipeline(name string) (*Pipeline, error) {
 	if r.pipelines[name] == nil {
 		resource := r.system.Pipeline(name)
 		pipeline, err := ParsePipeline(resource)
 		if err != nil {
-			glog.Fatalf("Cannot parse pipeline %s: %v", name, err)
+			return nil, fmt.Errorf("cannot parse pipeline %s: %w", name, err)
 		}
 		pipeline.Name = name
 		r.pipelines[name] = pipeline
 	}
-	return r.pipelines[name]
+	return r.pipelines[name], nil
 }
 
 // ProgramData returns source file contents for a given program or subprogram

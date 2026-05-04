@@ -1,6 +1,7 @@
 package core
 
 import (
+	"runtime"
 	"sync/atomic"
 	"unsafe"
 
@@ -62,9 +63,13 @@ func (m *Mesh) Name() string                     { return m.name }
 func (m *Mesh) Bounds() *AABB                    { return m.bounds }
 
 func (m *Mesh) SetPositions(positions []float32) {
+	m.positionBuffer.Release()
 	m.positionSize = uint64(len(positions) * 4)
 	m.positionBuffer = renderer.device.CreateBuffer(m.positionSize, gpu.BufferUsageVertex|gpu.BufferUsageCopyDst)
+	var pinner runtime.Pinner
+	pinner.Pin(&positions[0])
 	renderer.queue.WriteBuffer(m.positionBuffer, 0, unsafe.Pointer(&positions[0]), m.positionSize)
+	pinner.Unpin()
 
 	// grow bounds
 	for i := 0; i < len(positions); i += 3 {
@@ -77,18 +82,27 @@ func (m *Mesh) SetPositions(positions []float32) {
 }
 
 func (m *Mesh) SetNormals(normals []float32) {
+	m.normalBuffer.Release()
 	m.normalSize = uint64(len(normals) * 4)
 	m.normalBuffer = renderer.device.CreateBuffer(m.normalSize, gpu.BufferUsageVertex|gpu.BufferUsageCopyDst)
+	var pinner runtime.Pinner
+	pinner.Pin(&normals[0])
 	renderer.queue.WriteBuffer(m.normalBuffer, 0, unsafe.Pointer(&normals[0]), m.normalSize)
+	pinner.Unpin()
 }
 
 func (m *Mesh) SetTextureCoordinates(texcoords []float32) {
+	m.texCoordBuffer.Release()
 	m.texCoordSize = uint64(len(texcoords) * 4)
 	m.texCoordBuffer = renderer.device.CreateBuffer(m.texCoordSize, gpu.BufferUsageVertex|gpu.BufferUsageCopyDst)
+	var pinner runtime.Pinner
+	pinner.Pin(&texcoords[0])
 	renderer.queue.WriteBuffer(m.texCoordBuffer, 0, unsafe.Pointer(&texcoords[0]), m.texCoordSize)
+	pinner.Unpin()
 }
 
 func (m *Mesh) SetIndices(indices []uint16) {
+	m.indexBuffer.Release()
 	m.indexCount = uint32(len(indices))
 	m.indexFormat = gpu.IndexFormatUint16
 	rawSize := uint64(len(indices) * 2)
@@ -97,18 +111,25 @@ func (m *Mesh) SetIndices(indices []uint16) {
 	m.indexBuffer = renderer.device.CreateBuffer(m.indexSize, gpu.BufferUsageIndex|gpu.BufferUsageCopyDst)
 	// Pad data to aligned size
 	padded := make([]byte, m.indexSize)
-	copy(padded, (*[1 << 30]byte)(unsafe.Pointer(&indices[0]))[:rawSize])
+	copy(padded, (*[1 << 30]byte)(unsafe.Pointer(&indices[0]))[:rawSize:rawSize])
+	var pinner runtime.Pinner
+	pinner.Pin(&padded[0])
 	renderer.queue.WriteBuffer(m.indexBuffer, 0, unsafe.Pointer(&padded[0]), m.indexSize)
+	pinner.Unpin()
 }
 
 func (m *Mesh) SetIndices32(indices []uint32) {
+	m.indexBuffer.Release()
 	m.indexCount = uint32(len(indices))
 	m.indexFormat = gpu.IndexFormatUint32
 	rawSize := uint64(len(indices) * 4)
 	// uint32 indices are already 4-byte aligned
 	m.indexSize = rawSize
 	m.indexBuffer = renderer.device.CreateBuffer(m.indexSize, gpu.BufferUsageIndex|gpu.BufferUsageCopyDst)
+	var pinner runtime.Pinner
+	pinner.Pin(&indices[0])
 	renderer.queue.WriteBuffer(m.indexBuffer, 0, unsafe.Pointer(&indices[0]), m.indexSize)
+	pinner.Unpin()
 }
 
 func (m *Mesh) Draw(rp *RenderPass) {
@@ -121,13 +142,25 @@ func (m *Mesh) Draw(rp *RenderPass) {
 
 func (m *Mesh) DrawInstanced(rp *RenderPass, instanceCount int, instanceData unsafe.Pointer) {
 	dataSize := uint64(instanceCount * InstanceDataLen)
+	var pinner runtime.Pinner
+	pinner.Pin(instanceData)
 	renderer.queue.WriteBuffer(m.instanceBuffer, 0, instanceData, dataSize)
+	pinner.Unpin()
 	rp.SetVertexBuffer(0, m.positionBuffer, 0, m.positionSize)
 	rp.SetVertexBuffer(1, m.normalBuffer, 0, m.normalSize)
 	rp.SetVertexBuffer(2, m.texCoordBuffer, 0, m.texCoordSize)
 	rp.SetVertexBuffer(3, m.instanceBuffer, 0, dataSize)
 	rp.SetIndexBuffer(m.indexBuffer, m.indexFormat, 0, m.indexSize)
 	rp.DrawIndexed(m.indexCount, uint32(instanceCount), 0, 0, 0)
+}
+
+// Dispose releases all GPU buffers held by the mesh.
+func (m *Mesh) Dispose() {
+	m.positionBuffer.Release()
+	m.normalBuffer.Release()
+	m.texCoordBuffer.Release()
+	m.indexBuffer.Release()
+	m.instanceBuffer.Release()
 }
 
 func (m *Mesh) ID() uint32 { return m.id }

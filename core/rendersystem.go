@@ -208,6 +208,7 @@ type Renderer struct {
 	swapChainTexture gpu.Texture
 	swapChainView    gpu.TextureView
 	encoder          gpu.CommandEncoder
+	frameActive      bool
 
 	// Pipeline cache and defaults
 	pipelines           *pipelineCache
@@ -228,7 +229,7 @@ var renderer *Renderer
 var sharedInstanceData [MaxInstances]InstanceData
 
 // InitRenderer creates and initializes the global renderer.
-func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) {
+func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) error {
 	r := &Renderer{
 		surfaceFormat: gpu.TextureFormatBGRA8Unorm,
 		surfaceWidth:  width,
@@ -240,12 +241,12 @@ func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) {
 	var err error
 	adapter, err := r.instance.RequestAdapter()
 	if err != nil {
-		glog.Fatal("Failed to get wgpu adapter: ", err)
+		return fmt.Errorf("failed to get wgpu adapter: %w", err)
 	}
 
 	r.device, err = adapter.RequestDevice()
 	if err != nil {
-		glog.Fatal("Failed to get wgpu device: ", err)
+		return fmt.Errorf("failed to get wgpu device: %w", err)
 	}
 	adapter.Release()
 
@@ -253,7 +254,7 @@ func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) {
 
 	r.surface, err = r.instance.CreateMetalSurface(metalLayer)
 	if err != nil {
-		glog.Fatal("Failed to create wgpu surface: ", err)
+		return fmt.Errorf("failed to create wgpu surface: %w", err)
 	}
 
 	r.surface.Configure(r.device, r.surfaceFormat, r.surfaceWidth, r.surfaceHeight)
@@ -290,6 +291,36 @@ func InitRenderer(metalLayer unsafe.Pointer, width, height uint32) {
 
 	renderer = r
 	glog.Info("wgpu renderer initialized")
+	return nil
+}
+
+// Shutdown releases all GPU resources held by the renderer.
+func (r *Renderer) Shutdown() {
+	if r.defaultTexture != nil {
+		r.defaultTexture.view.Release()
+		r.defaultTexture.texture.Release()
+		r.defaultTexture.sampler.Release()
+	}
+	if r.defaultDepthTexture != nil {
+		r.defaultDepthTexture.view.Release()
+		r.defaultDepthTexture.texture.Release()
+		r.defaultDepthTexture.sampler.Release()
+	}
+	if r.pipelines != nil {
+		r.pipelines.release()
+	}
+	if r.surface != (gpu.Surface{}) {
+		r.surface.Release()
+	}
+	if r.queue != (gpu.Queue{}) {
+		r.queue.Release()
+	}
+	if r.device != (gpu.Device{}) {
+		r.device.Release()
+	}
+	if r.instance != (gpu.Instance{}) {
+		r.instance.Release()
+	}
 }
 
 // GetRenderer returns the global renderer.
@@ -355,7 +386,8 @@ func (r *Renderer) NewTexture(d TextureDescriptor, data []byte) *Texture {
 // NewTextureFromImageData creates a texture from encoded image bytes.
 func (r *Renderer) NewTextureFromImageData(data []byte, d TextureDescriptor) *Texture {
 	if data == nil {
-		glog.Fatal("Cannot read texture: nil data")
+		glog.Warning("Cannot read texture: nil data")
+		return nil
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(data))
@@ -404,6 +436,7 @@ func (r *Renderer) CanBatch(a *Material, b *Material) bool {
 
 // BeginFrame acquires the swap chain texture and creates a command encoder.
 func (r *Renderer) BeginFrame() {
+	r.frameActive = false
 	st := r.surface.GetCurrentTexture()
 	if st.Status != gpu.SurfaceGetCurrentTextureStatusSuccessOptimal &&
 		st.Status != gpu.SurfaceGetCurrentTextureStatusSuccessSuboptimal {
@@ -414,10 +447,14 @@ func (r *Renderer) BeginFrame() {
 	r.swapChainView = r.swapChainTexture.CreateView()
 	r.encoder = r.device.CreateCommandEncoder()
 	r.stats = FrameStats{}
+	r.frameActive = true
 }
 
 // BeginRenderPass creates a new render pass from the descriptor.
 func (r *Renderer) BeginRenderPass(desc RenderPassDescriptor) *RenderPass {
+	if !r.frameActive {
+		return nil
+	}
 	r.stats.RenderPasses++
 	gpuDesc := gpu.RenderPassDescriptor{}
 
@@ -481,6 +518,9 @@ func (r *Renderer) BeginRenderPass(desc RenderPassDescriptor) *RenderPass {
 // Flush submits the current command encoder and starts a new one.
 // Use between draw sequences that write to the same buffers.
 func (r *Renderer) Flush() {
+	if !r.frameActive {
+		return
+	}
 	r.stats.Flushes++
 	cmdBuf := r.encoder.Finish()
 	r.queue.Submit(cmdBuf)
@@ -491,6 +531,9 @@ func (r *Renderer) Flush() {
 
 // EndFrame submits the command buffer and presents.
 func (r *Renderer) EndFrame() {
+	if !r.frameActive {
+		return
+	}
 	cmdBuf := r.encoder.Finish()
 	r.queue.Submit(cmdBuf)
 	cmdBuf.Release()
@@ -602,11 +645,18 @@ func DefaultRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Nod
 	// Z-prepass
 	zDesc := camera.MakeRenderPassDescriptor(true, true)
 	zPass := renderer.BeginRenderPass(zDesc)
+	if zPass == nil {
+		return
+	}
 	for m, nodes := range materialBuckets {
 		if len(nodes) == 0 || m.Blending {
 			continue
 		}
-		zpassState := resourceManager.Pipeline(fmt.Sprintf("%s-z", nodes[0].pipeline.Name))
+		zpassState, err := resourceManager.Pipeline(fmt.Sprintf("%s-z", nodes[0].pipeline.Name))
+		if err != nil {
+			glog.Warningf("failed to load z-prepass pipeline: %v", err)
+			continue
+		}
 		if !zPass.SetPipeline(zpassState) {
 			continue
 		}
@@ -650,7 +700,15 @@ func DefaultRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Nod
 func AABBRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]*Node) {
 	desc := camera.MakeRenderPassDescriptor(false, false)
 	pass := renderer.BeginRenderPass(desc)
-	pass.SetPipeline(resourceManager.Pipeline("aabb"))
+	if pass == nil {
+		return
+	}
+	aabbPipeline, err := resourceManager.Pipeline("aabb")
+	if err != nil {
+		glog.Warningf("failed to load aabb pipeline: %v", err)
+		return
+	}
+	pass.SetPipeline(aabbPipeline)
 	pass.SetCameraConstants(camera.constants.buffer)
 
 	// Collect all nodes across all buckets into a single instance array
@@ -687,6 +745,9 @@ func PostProcessRenderTechnique(camera *Camera, materialBuckets map[*Pipeline][]
 		camera.clearMode&ClearDepth != 0,
 	)
 	pass := renderer.BeginRenderPass(desc)
+	if pass == nil {
+		return
+	}
 	for _, nodes := range materialBuckets {
 		if len(nodes) == 0 {
 			continue
@@ -725,7 +786,7 @@ func RenderBatch(pass *RenderPass, camera *Camera, nodes []*Node) {
 		sharedInstanceData[i].ModelViewProjectionMatrix = Mat4DoubleToFloat(mvpMatrix64)
 		sharedInstanceData[i].Custom = n.material.instanceData
 	}
-	pass.SetMaterial(&nodes[0].material)
+	pass.SetMaterial(nodes[0].material)
 	nodes[0].mesh.DrawInstanced(pass, len(nodes), unsafe.Pointer(&sharedInstanceData))
 
 	renderer.stats.Batches++

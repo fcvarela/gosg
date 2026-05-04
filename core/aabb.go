@@ -37,7 +37,7 @@ func (a *AABB) Min() mgl64.Vec3 {
 	return a.min
 }
 
-// Max returns the min point
+// Max returns the max point
 func (a *AABB) Max() mgl64.Vec3 {
 	return a.max
 }
@@ -168,10 +168,8 @@ func (a *AABB) Transformed(m mgl64.Mat4) *AABB {
 	}
 
 	for _, p := range points {
-		min := mgl64.TransformCoordinate(p, m)
-		max := mgl64.TransformCoordinate(p, m)
-		newAABB.ExtendWithPoint(min)
-		newAABB.ExtendWithPoint(max)
+		transformed := mgl64.TransformCoordinate(p, m)
+		newAABB.ExtendWithPoint(transformed)
 	}
 
 	// return the new box

@@ -78,15 +78,24 @@ func buildNode(sn *SceneNode) (*Node, []cameraEntry, []deferredTexRef) {
 
 	// Load model
 	if sn.Model != "" {
-		model := resourceManager.Model(sn.Model)
-		for _, c := range model.Children() {
-			node.AddChild(c)
+		model, err := resourceManager.Model(sn.Model)
+		if err != nil {
+			glog.Warningf("Scene: failed to load model %q: %v", sn.Model, err)
+		} else {
+			for _, c := range model.Children() {
+				node.AddChild(c)
+			}
 		}
 	}
 
 	// Pipeline
 	if sn.Pipeline != "" {
-		node.SetPipeline(resourceManager.Pipeline(sn.Pipeline))
+		pipeline, err := resourceManager.Pipeline(sn.Pipeline)
+		if err != nil {
+			glog.Warningf("Scene: failed to load pipeline %q: %v", sn.Pipeline, err)
+		} else {
+			node.SetPipeline(pipeline)
+		}
 	}
 
 	// Cull component

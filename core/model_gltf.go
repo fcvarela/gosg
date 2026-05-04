@@ -17,18 +17,18 @@ import (
 )
 
 // LoadGLTF loads a glTF/GLB file and returns a node tree.
-func LoadGLTF(name string, resourceSystem ResourceSystem) *Node {
+func LoadGLTF(name string, resourceSystem ResourceSystem) (*Node, error) {
 	path := resourceSystem.ModelPath(name)
 	doc, err := gltf.Open(path)
 	if err != nil {
-		glog.Fatalf("Failed to open glTF %s: %v", name, err)
+		return nil, fmt.Errorf("failed to open glTF %s: %w", name, err)
 	}
 
 	basename := filepath.Base(name)
 	root := NewNode(basename)
 
 	if len(doc.Scenes) == 0 {
-		return root
+		return root, nil
 	}
 
 	sceneIdx := 0
@@ -42,7 +42,7 @@ func LoadGLTF(name string, resourceSystem ResourceSystem) *Node {
 		root.AddChild(child)
 	}
 
-	return root
+	return root, nil
 }
 
 func loadGLTFNode(doc *gltf.Document, nodeIdx int, prefix string) *Node {
@@ -198,7 +198,12 @@ func loadGLTFPrimitive(doc *gltf.Document, prim *gltf.Primitive, node *Node) {
 		}
 	}
 
-	node.pipeline = resourceManager.Pipeline(pipelineName)
+	pipeline, err := resourceManager.Pipeline(pipelineName)
+	if err != nil {
+		glog.Warningf("glTF: failed to load pipeline %q: %v", pipelineName, err)
+	} else {
+		node.pipeline = pipeline
+	}
 }
 
 func loadGLTFTexture(doc *gltf.Document, texIdx int, desc TextureDescriptor) *Texture {
@@ -215,7 +220,12 @@ func loadGLTFTexture(doc *gltf.Document, texIdx int, desc TextureDescriptor) *Te
 	if img.BufferView != nil {
 		bv := doc.BufferViews[*img.BufferView]
 		buf := doc.Buffers[bv.Buffer]
-		data = buf.Data[bv.ByteOffset : bv.ByteOffset+bv.ByteLength]
+		end := bv.ByteOffset + bv.ByteLength
+		if int(end) > len(buf.Data) {
+			glog.Warningf("glTF: buffer view extends beyond buffer data")
+			return nil
+		}
+		data = buf.Data[bv.ByteOffset:end]
 	} else if img.URI != "" {
 		glog.Warningf("glTF: external image URI %q not supported yet", img.URI)
 		return nil
@@ -242,7 +252,12 @@ func splitMetallicRoughnessTexture(doc *gltf.Document, texIdx int, desc TextureD
 	if img.BufferView != nil {
 		bv := doc.BufferViews[*img.BufferView]
 		buf := doc.Buffers[bv.Buffer]
-		data = buf.Data[bv.ByteOffset : bv.ByteOffset+bv.ByteLength]
+		end := bv.ByteOffset + bv.ByteLength
+		if int(end) > len(buf.Data) {
+			glog.Warningf("glTF: buffer view extends beyond buffer data in metallicRoughness texture")
+			return nil, nil
+		}
+		data = buf.Data[bv.ByteOffset:end]
 	}
 
 	if len(data) == 0 {
